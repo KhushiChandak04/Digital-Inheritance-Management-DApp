@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Digital Inheritance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e37;
+    --text: #e7e9ee;
+    --muted: #8b92a3;
+    --accent: #4f7cff;
+    --good: #35c47a;
+    --warn: #e0a63a;
+    --bad: #e0553a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 32px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px 0; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 960px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 14px 0; }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: none; }
+  .row span:first-child { color: var(--muted); }
+  input, button {
+    font-family: inherit;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    background: #0f1115;
+    color: var(--text);
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  button {
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.secondary { background: transparent; border: 1px solid var(--border); }
+  button.danger { background: var(--bad); }
+  button:hover { opacity: 0.9; }
+  .status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .status-ACTIVE { background: rgba(53,196,122,.15); color: var(--good); }
+  .status-VERIFICATION_PENDING { background: rgba(224,166,58,.15); color: var(--warn); }
+  .status-EXECUTED { background: rgba(79,124,255,.15); color: var(--accent); }
+  .status-CANCELLED { background: rgba(224,85,58,.15); color: var(--bad); }
+  #log { font-size: 12px; color: var(--muted); margin-top: 20px; white-space: pre-wrap; max-width: 960px; }
+  .field-group { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Digital Inheritance Dashboard</h1>
+<div class="subtitle">Blockchain-based digital inheritance management prototype &mdash; not a legal will</div>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Connection</h2>
+    <button id="connectBtn">Connect Wallet</button>
+    <div class="row"><span>Account</span><span id="account">Not connected</span></div>
+    <div class="row"><span>Contract Address</span><span id="contractAddrDisplay">Not set</span></div>
+    <input id="contractAddrInput" placeholder="Paste deployed contract address" />
+    <button class="secondary" id="loadContractBtn">Load Contract</button>
+  </div>
+
+  <div class="card">
+    <h2>Plan Status</h2>
+    <div class="row"><span>Status</span><span id="statusPill">-</span></div>
+    <div class="row"><span>Owner</span><span id="ownerAddr">-</span></div>
+    <div class="row"><span>Executor</span><span id="executorAddr">-</span></div>
+    <div class="row"><span>Total Deposited</span><span id="totalDeposited">-</span></div>
+    <div class="row"><span>Unlock Time</span><span id="unlockTime">-</span></div>
+    <button class="secondary" id="refreshBtn">Refresh</button>
+  </div>
+
+  <div class="card">
+    <h2>Owner Actions</h2>
+    <div class="field-group">
+      <input id="benAddr" placeholder="Beneficiary address" />
+      <input id="benPct" placeholder="% (e.g. 40)" style="max-width:90px" />
+    </div>
+    <button id="addBenBtn">Add Beneficiary</button>
+    <input id="depositAmt" placeholder="Amount in ETH" />
+    <button id="depositBtn">Deposit Assets</button>
+    <button class="danger" id="cancelBtn">Cancel Inheritance</button>
+  </div>
+
+  <div class="card">
+    <h2>Executor / Public Actions</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0;">
+      Initiating inheritance should only be done after off-chain verification
+      of the real-world condition (see project README).
+    </p>
+    <button id="initiateBtn">Initiate Inheritance (Executor)</button>
+    <button id="executeBtn">Execute Distribution</button>
+  </div>
+
+</div>
+
+<div id="log"></div>
+
+<script>
+const CONTRACT_ABI = [
+  "function owner() view returns (address)",
+  "function executor() view returns (address)",
+  "function totalDeposited() view returns (uint256)",
+  "function unlockTimestamp() view returns (uint256)",
+  "function getInheritanceStatus() view returns (uint8)",
+  "function addBeneficiary(address wallet, uint256 percentageBasisPoints)",
+  "function depositAssets() payable",
+  "function initiateInheritance()",
+  "function cancelInheritance()",
+  "function executeInheritance()"
+];
+
+const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
+
+let provider, signer, contract;
+
+function log(msg) {
+  const el = document.getElementById("log");
+  const time = new Date().toLocaleTimeString();
+  el.textContent = `[${time}] ${msg}\n` + el.textContent;
+}
+
+document.getElementById("connectBtn").addEventListener("click", async () => {
+  if (!window.ethereum) {
+    log("MetaMask not detected. Please install it to use this dashboard.");
+    return;
+  }
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = provider.getSigner();
+  const address = await signer.getAddress();
+  document.getElementById("account").textContent = address;
+  log("Wallet connected: " + address);
+});
+
+document.getElementById("loadContractBtn").addEventListener("click", () => {
+  const addr = document.getElementById("contractAddrInput").value.trim();
+  if (!ethers.utils.isAddress(addr)) {
+    log("Invalid contract address.");
+    return;
+  }
+  if (!signer) {
+    log("Connect your wallet first.");
+    return;
+  }
+  contract = new ethers.Contract(addr, CONTRACT_ABI, signer);
+  document.getElementById("contractAddrDisplay").textContent = addr;
+  log("Contract loaded at " + addr);
+  refresh();
+});
+
+async function refresh() {
+  if (!contract) return;
+  try {
+    const [ownerAddr, executorAddr, deposited, unlock, statusIdx] = await Promise.all([
+      contract.owner(),
+      contract.executor(),
+      contract.totalDeposited(),
+      contract.unlockTimestamp(),
+      contract.getInheritanceStatus()
+    ]);
+
+    document.getElementById("ownerAddr").textContent = ownerAddr;
+    document.getElementById("executorAddr").textContent = executorAddr;
+    document.getElementById("totalDeposited").textContent = ethers.utils.formatEther(deposited) + " ETH";
+    document.getElementById("unlockTime").textContent = unlock.toString() === "0"
+      ? "Not started"
+      : new Date(unlock.toNumber() * 1000).toLocaleString();
+
+    const statusName = STATUS_NAMES[statusIdx];
+    const pill = document.getElementById("statusPill");
+    pill.textContent = statusName;
+    pill.className = "status-pill status-" + statusName;
+  } catch (err) {
+    log("Refresh failed: " + err.message);
+  }
+}
+
+document.getElementById("refreshBtn").addEventListener("click", refresh);
+
+document.getElementById("addBenBtn").addEventListener("click", async () => {
+  const addr = document.getElementById("benAddr").value.trim();
+  const pct = parseFloat(document.getElementById("benPct").value.trim());
+  if (!ethers.utils.isAddress(addr) || isNaN(pct)) {
+    log("Enter a valid address and percentage.");
+    return;
+  }
+  try {
+    const basisPoints = Math.round(pct * 100);
+    const tx = await contract.addBeneficiary(addr, basisPoints);
+    log("Adding beneficiary, tx: " + tx.hash);
+    await tx.wait();
+    log("Beneficiary added.");
+    refresh();
+  } catch (err) {
+    log("Failed: " + err.message);
+  }
+});
+
+document.getElementById("depositBtn").addEventListener("click", async () => {
+  const amt = document.getElementById("depositAmt").value.trim();
+  if (!amt || isNaN(parseFloat(amt))) {
+    log("Enter a valid ETH amount.");
+    return;
+  }
+  try {
+    const tx = await contract.depositAssets({ value: ethers.utils.parseEther(amt) });
+    log("Depositing, tx: " + tx.hash);
+    await tx.wait();
+    log("Deposit confirmed.");
+    refresh();
+  } catch (err) {
+    log("Failed: " + err.message);
+  }
+});
+
+document.getElementById("initiateBtn").addEventListener("click", async () => {
+  try {
+    const tx = await contract.initiateInheritance();
+    log("Initiating inheritance, tx: " + tx.hash);
+    await tx.wait();
+    log("Inheritance initiated. Timelock started.");
+    refresh();
+  } catch (err) {
+    log("Failed: " + err.message);
+  }
+});
+
+document.getElementById("executeBtn").addEventListener("click", async () => {
+  try {
+    const tx = await contract.executeInheritance();
+    log("Executing distribution, tx: " + tx.hash);
+    await tx.wait();
+    log("Distribution complete.");
+    refresh();
+  } catch (err) {
+    log("Failed: " + err.message);
+  }
+});
+
+document.getElementById("cancelBtn").addEventListener("click", async () => {
+  try {
+    const tx = await contract.cancelInheritance();
+    log("Cancelling, tx: " + tx.hash);
+    await tx.wait();
+    log("Inheritance cancelled.");
+    refresh();
+  } catch (err) {
+    log("Failed: " + err.message);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "digital-inheritance-dapp",
+  "version": "1.0.0",
+  "description": "Blockchain-based digital inheritance management prototype",
+  "scripts": {
+    "compile": "truffle compile",
+    "migrate": "truffle migrate --reset",
+    "test": "truffle test"
+  },
+  "devDependencies": {
+    "truffle": "^5.11.5",
+    "@openzeppelin/test-helpers": "^0.5.16"
+  }
+}
