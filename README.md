@@ -21,7 +21,11 @@ inheritance-dapp/
 ├── test/
 │   └── digitalInheritance.test.js
 ├── frontend/
-│   └── index.html               Single-file dashboard (ethers.js, no build step)
+│   ├── index.html               Application shell
+│   ├── app.js                   UI state and wallet lifecycle
+│   ├── contract-service.js      Centralized ethers.js contract service
+│   ├── styles.css               Responsive product styling
+│   └── index.backup.html        Original frontend backup
 ├── truffle-config.js
 ├── package.json
 └── README.md
@@ -69,22 +73,49 @@ inheritance-dapp/
 
 ## Using the Frontend
 
-The frontend is a single static HTML file and does not require a build
-step.
+The frontend remains a static application so it can be demonstrated without
+migrating the Truffle project or resetting Ganache. It is split into a shell,
+styles, an application controller, and a centralized contract service.
 
-1. Open `frontend/index.html` directly in a browser, or serve it with any
-   static file server.
-2. Import one or more Ganache private keys into MetaMask and connect
+1. Run the frontend check/build command:
+
+   ```
+   npm run frontend:build
+   ```
+
+2. Serve the frontend over HTTP (recommended for ES modules):
+
+   ```
+   npm run frontend:serve
+   ```
+
+   Then open `http://127.0.0.1:4173`.
+
+3. Import one or more Ganache private keys into MetaMask and connect
    MetaMask to the Ganache network (RPC URL `http://127.0.0.1:7545`,
    chain ID as reported by Ganache).
-3. Click **Connect Wallet**.
-4. Paste the deployed contract address into the **Contract Address**
-   field and click **Load Contract**.
-5. Use the owner account to add beneficiaries and deposit ETH.
-6. Switch MetaMask to the executor account to call **Initiate
-   Inheritance**.
-7. Once the timelock has elapsed, any account can call **Execute
-   Distribution**.
+4. Click **Connect wallet**. The frontend attempts to reconnect to an
+   already-authorized account after reload and reacts to account or network
+   changes.
+5. Confirm the deployed contract address under **Settings**. The current
+   local address is prefilled from `frontend/config.js`; the selected address
+   is saved in browser local storage and is not embedded into contract logic.
+6. Use the owner account to manage beneficiaries, allocations, document
+   reference, executor, and protected ETH. Switch to the executor account to
+   initiate verification. Once the timelock has elapsed, any account can
+   execute distribution.
+
+For a quick static preview, `frontend/index.html` can also be opened directly,
+although some browsers restrict ES modules from `file://` URLs.
+
+The interface validates addresses, detects duplicate and conflicting roles,
+normalizes mixed-case input, shows allocation progress, translates common
+transaction errors, and displays confirmed contract events as an activity
+feed. Beneficiary display names are deliberately stored only in this browser;
+the deployed contract stores wallet addresses and percentages, not labels.
+
+See [FRONTEND_REFACTOR_NOTES.md](FRONTEND_REFACTOR_NOTES.md) for the changed
+files, architecture decisions, known limitations, and validation commands.
 
 ## Core Contract Behavior
 

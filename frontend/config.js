@@ -1,0 +1,4 @@
+export const DEFAULT_CONTRACT_ADDRESS = "0x39F57a05B7c8BeE5B174d6d172285C0448Cea3e3";
+export const EXPECTED_CHAIN_IDS = [1337, 5777];
+export const EXPECTED_NETWORK_LABEL = "Ganache local";
+export const EXPLORER_BASE_URL = "";

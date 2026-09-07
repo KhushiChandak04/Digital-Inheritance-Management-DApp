@@ -5,7 +5,10 @@
   "scripts": {
     "compile": "truffle compile",
     "migrate": "truffle migrate --reset",
-    "test": "truffle test"
+    "test": "truffle test",
+    "frontend:check": "node scripts/check-frontend.cjs",
+    "frontend:build": "npm run frontend:check",
+    "frontend:serve": "npx http-server frontend -p 4173 -c-1"
   },
   "devDependencies": {
     "truffle": "^5.11.5",

@@ -1,0 +1,110 @@
+import { DEFAULT_CONTRACT_ADDRESS } from "./config.js";
+
+export const ABI = [
+  "function owner() view returns (address)",
+  "function executor() view returns (address)",
+  "function totalDeposited() view returns (uint256)",
+  "function timelockDuration() view returns (uint256)",
+  "function activationTimestamp() view returns (uint256)",
+  "function unlockTimestamp() view returns (uint256)",
+  "function creationTimestamp() view returns (uint256)",
+  "function documentReference() view returns (string)",
+  "function getInheritanceStatus() view returns (uint8)",
+  "function getUnlockTime() view returns (uint256)",
+  "function getBeneficiaries() view returns (tuple(address wallet,uint256 percentageBasisPoints)[])",
+  "function getBeneficiaryCount() view returns (uint256)",
+  "function addBeneficiary(address wallet,uint256 percentageBasisPoints)",
+  "function removeBeneficiary(uint256 index)",
+  "function updateBeneficiaryShare(uint256 index,uint256 newPercentageBasisPoints)",
+  "function setExecutor(address newExecutor)",
+  "function setDocumentReference(string cidOrHash)",
+  "function depositAssets() payable",
+  "function initiateInheritance()",
+  "function cancelInheritance()",
+  "function executeInheritance()",
+  "event PlanCreated(address indexed owner,address indexed executor,uint256 timelockDuration)",
+  "event BeneficiaryAdded(address indexed wallet,uint256 percentageBasisPoints)",
+  "event BeneficiaryRemoved(address indexed wallet)",
+  "event AssetsDeposited(address indexed from,uint256 amount)",
+  "event ExecutorUpdated(address indexed newExecutor)",
+  "event InheritanceInitiated(address indexed executor,uint256 activationTimestamp,uint256 unlockTimestamp)",
+  "event InheritanceCancelled(uint256 timestamp)",
+  "event AssetsDistributed(address indexed beneficiary,uint256 amount)",
+  "event PlanExecuted(uint256 timestamp)",
+  "event DocumentReferenceSet(string cidOrHash)"
+];
+
+export const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
+
+export function getSavedAddress() {
+  return localStorage.getItem("inheritance.contractAddress") || DEFAULT_CONTRACT_ADDRESS;
+}
+
+export function normalizeAddress(ethers, value) {
+  const input = String(value || "").trim();
+  if (!ethers.utils.isAddress(input)) throw new Error("Enter a valid Ethereum address.");
+  return ethers.utils.getAddress(input);
+}
+
+export function readableError(error) {
+  const code = error?.code;
+  if (code === 4001 || code === "ACTION_REJECTED") return "Transaction cancelled in your wallet.";
+  if (code === "INSUFFICIENT_FUNDS" || /insufficient funds/i.test(error?.message || "")) return "Your wallet does not have enough ETH for this transaction and its gas.";
+  const reason = error?.error?.data?.message || error?.data?.message || error?.reason || error?.message || "The transaction could not be completed.";
+  if (/Caller is not the owner/i.test(reason)) return "Only the plan owner can perform this action.";
+  if (/Caller is not the executor/i.test(reason)) return "Only the trusted executor can initiate verification.";
+  if (/Invalid plan status/i.test(reason)) return "This action is unavailable in the current inheritance status.";
+  if (/Timelock has not yet elapsed/i.test(reason)) return "The distribution date has not arrived yet.";
+  if (/Total allocation would exceed/i.test(reason)) return "Allocation cannot exceed 100%.";
+  if (/allocations must total/i.test(reason)) return "Beneficiary allocations must total exactly 100% before verification.";
+  if (/No assets deposited/i.test(reason)) return "Deposit protected assets before initiating inheritance.";
+  if (/Transfer to beneficiary failed/i.test(reason)) return "A beneficiary transfer failed. No partial distribution was completed.";
+  return reason.replace(/^execution reverted:\s*/i, "").split("{", 1)[0].trim();
+}
+
+export class ContractService {
+  constructor(ethers) {
+    this.ethers = ethers;
+    this.readProvider = null;
+    this.signer = null;
+    this.contract = null;
+    this.address = "";
+  }
+
+  setProvider(provider) { this.readProvider = provider; }
+  setSigner(signer) {
+    this.signer = signer;
+    if (this.address) this.contract = new this.ethers.Contract(this.address, ABI, signer);
+  }
+  setAddress(address) {
+    this.address = normalizeAddress(this.ethers, address);
+    localStorage.setItem("inheritance.contractAddress", this.address);
+    const runner = this.signer || this.readProvider;
+    this.contract = new this.ethers.Contract(this.address, ABI, runner);
+  }
+  async readSnapshot() {
+    if (!this.contract) throw new Error("Load a deployed contract first.");
+    const [owner, executor, totalDeposited, timelockDuration, activationTimestamp, unlockTimestamp, creationTimestamp, documentReference, status, beneficiaries] = await Promise.all([
+      this.contract.owner(), this.contract.executor(), this.contract.totalDeposited(), this.contract.timelockDuration(),
+      this.contract.activationTimestamp(), this.contract.unlockTimestamp(), this.contract.creationTimestamp(),
+      this.contract.documentReference(), this.contract.getInheritanceStatus(), this.contract.getBeneficiaries()
+    ]);
+    return { owner, executor, totalDeposited, timelockDuration, activationTimestamp, unlockTimestamp, creationTimestamp, documentReference, status: Number(status), beneficiaries };
+  }
+  async getEvents() {
+    if (!this.contract) return [];
+    const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
+    const events = (await Promise.all(names.map(name => this.contract.queryFilter(this.contract.filters[name]())))).flat();
+    return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
+  }
+  write(method, args = [], overrides = {}) { return this.contract.connect(this.signer)[method](...args, overrides); }
+  addBeneficiary(address, bps) { return this.write("addBeneficiary", [address, bps]); }
+  removeBeneficiary(index) { return this.write("removeBeneficiary", [index]); }
+  updateBeneficiary(index, bps) { return this.write("updateBeneficiaryShare", [index, bps]); }
+  setExecutor(address) { return this.write("setExecutor", [address]); }
+  setDocumentReference(value) { return this.write("setDocumentReference", [value]); }
+  depositAssets(value) { return this.write("depositAssets", [], { value }); }
+  initiateInheritance() { return this.write("initiateInheritance"); }
+  cancelInheritance() { return this.write("cancelInheritance"); }
+  executeInheritance() { return this.write("executeInheritance"); }
+}

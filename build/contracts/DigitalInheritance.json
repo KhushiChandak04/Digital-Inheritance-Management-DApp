@@ -19869,10 +19869,189 @@
       "links": {},
       "address": "0x39F57a05B7c8BeE5B174d6d172285C0448Cea3e3",
       "transactionHash": "0x8a3a60285113f838c9785ffa29b00597ed5d4f5e35fee87d8c75e58fb7509dab"
+    },
+    "1788780946416": {
+      "events": {
+        "0x4394d1aa82c7930ef4a9916042dd27d578f39d015baa27b33969d08201d860b9": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "from",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            }
+          ],
+          "name": "AssetsDeposited",
+          "type": "event"
+        },
+        "0x90a8167889b4e7e09e759f552565094d8dd4fd0b1c65c705e78d61369cb2bc6b": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            }
+          ],
+          "name": "AssetsDistributed",
+          "type": "event"
+        },
+        "0xe6b83177f11971ba30369bb38b914ffba97d5969a3c857b286fa8fdbb150b3ba": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "wallet",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "percentageBasisPoints",
+              "type": "uint256"
+            }
+          ],
+          "name": "BeneficiaryAdded",
+          "type": "event"
+        },
+        "0x72977dad29432f655f11c2f0e72ef5124bb9ade7a512fb7a43a9f504df223428": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "wallet",
+              "type": "address"
+            }
+          ],
+          "name": "BeneficiaryRemoved",
+          "type": "event"
+        },
+        "0x5afd31e6869ffd5aa71e61eda424acdafd0b7e1ec593d6f0a52b5c06dce31701": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "string",
+              "name": "cidOrHash",
+              "type": "string"
+            }
+          ],
+          "name": "DocumentReferenceSet",
+          "type": "event"
+        },
+        "0xd9436ef9ce00ffeabc5da2489701502d3bd1a5ed7b254a1981fc5ffef9828e11": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "newExecutor",
+              "type": "address"
+            }
+          ],
+          "name": "ExecutorUpdated",
+          "type": "event"
+        },
+        "0xed08d97c8600a08ac23575fcedd9f4848ac770691b054d7062239b4ccdae4a1b": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "timestamp",
+              "type": "uint256"
+            }
+          ],
+          "name": "InheritanceCancelled",
+          "type": "event"
+        },
+        "0xe1ceb7b1d1b88750a16f0d864b567e26ecc3dcc83058857a4f78cf7e11944d77": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "executor",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "activationTimestamp",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "unlockTimestamp",
+              "type": "uint256"
+            }
+          ],
+          "name": "InheritanceInitiated",
+          "type": "event"
+        },
+        "0x1af7b2549f5b994bef7792c40d4b089c85997b2851847cd5bf6e356067bec691": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "owner",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "executor",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "timelockDuration",
+              "type": "uint256"
+            }
+          ],
+          "name": "PlanCreated",
+          "type": "event"
+        },
+        "0xd2bc9e4dc330560edb1c1fc3366b7aaabd27f843668a03b07e02ced445546e51": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "timestamp",
+              "type": "uint256"
+            }
+          ],
+          "name": "PlanExecuted",
+          "type": "event"
+        }
+      },
+      "links": {},
+      "address": "0x5849E5cdd4873916EB6B2b3B04793EE4aEfaDF0C",
+      "transactionHash": "0x9ef65f3cfeab57edcf9b32df761c78973d3707100d17b438f0c6a5329d09c540"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2026-09-07T10:44:14.127Z",
+  "updatedAt": "2026-09-07T11:39:42.039Z",
   "networkType": "ethereum",
   "devdoc": {
     "details": "This contract does NOT determine whether a person has died.         It relies on an authorized executor (or, in the extended         version, a set of verifiers) to attest that the real-world         condition for inheritance has been satisfied. This is a         deliberate design choice made to address the blockchain         \"oracle problem\" honestly rather than pretend it can be         solved on-chain.",
