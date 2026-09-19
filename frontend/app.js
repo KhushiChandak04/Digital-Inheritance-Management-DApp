@@ -69,14 +69,27 @@ async function connect(request = false) {
 function updateConnection() { setText("walletLabel", state.account ? shortAddress(state.account) : "Connect wallet"); setText("networkLabel", state.networkOk ? EXPECTED_NETWORK_LABEL : state.chainId ? `Chain ${state.chainId}` : "Network unavailable"); $("networkChip").classList.toggle("wrong", !state.networkOk); setText("roleValue", getRole()); setText("roleHint", state.account ? "Permissions update with your wallet" : "Connect to see permissions"); }
 function showWrongNetwork() { $("wrongNetwork").classList.remove("hidden"); }
 function hideWrongNetwork() { $("wrongNetwork").classList.add("hidden"); }
+function clearLoadedPlan() {
+  state.snapshot = null;
+  state.events = [];
+  ["heroStatus", "balanceValue", "assetPageBalance", "beneficiaryCount", "allocationValue", "executorShort", "distributionDate", "detailOwner", "planOwner", "planExecutor", "verificationExecutor"].forEach(id => setText(id, "—"));
+  setText("statusPill", "NOT LOADED");
+  setText("planStatusPill", "—");
+  setText("verificationStatus", "—");
+  setText("nextAction", "Load a deployed contract to begin.");
+  setText("recentActivity", "");
+  setText("contractLoadState", "No deployment loaded");
+  $("beneficiaryRows").innerHTML = `<tr><td colspan="5"><div class="empty-state">No contract loaded.</div></td></tr>`;
+}
 
 async function loadContract(address) {
-  try { service.setAddress(address); $("contractInput").value = service.address; await refreshAll(); hideWrongNetwork(); setNotice("Plan loaded. Reads are synchronized with the local contract."); setTimeout(() => setNotice(""), 3500); }
+  clearLoadedPlan();
+  try { service.setAddress(address); $("contractInput").value = service.address; await refreshAll(true); setText("contractLoadState", `Loaded ${shortAddress(service.address)}`); hideWrongNetwork(); setNotice("Plan loaded. Reads are synchronized with the selected deployment."); setTimeout(() => setNotice(""), 3500); }
   catch (error) { setFieldError("contractError", readableError(error)); showToast(readableError(error), true); }
 }
-async function refreshAll() {
+async function refreshAll(throwOnError = false) {
   if (!service.contract) return;
-  try { state.snapshot = await service.readSnapshot(); await refreshEvents(); render(); } catch (error) { setNotice(`Unable to read the plan: ${readableError(error)}`, true); }
+  try { state.snapshot = await service.readSnapshot(); await refreshEvents(); render(); } catch (error) { clearLoadedPlan(); setNotice(`Unable to read the plan: ${readableError(error)}`, true); if (throwOnError) throw error; }
 }
 async function refreshEvents() { try { state.events = await service.getEvents(); renderActivity(); } catch (error) { if (state.page === "activity") showToast(`Activity unavailable: ${readableError(error)}`, true); } }
 
@@ -122,5 +135,5 @@ function setupForms() {
   $("executeBtn").addEventListener("click", () => confirmAction("Execute distribution", "The contract will distribute the protected assets according to the registered percentages. Continue?", () => transact("Executing distribution", () => service.executeInheritance())));
 }
 
-function init() { $("contractInput").value = getSavedAddress(); setupTheme(); setupNavigation(); setupForms(); if (window.ethereum) { window.ethereum.on("accountsChanged", accounts => { if (!accounts.length) { state.account = ""; state.signer = null; updateConnection(); showToast("Wallet disconnected."); } else connect(false); }); window.ethereum.on("chainChanged", () => connect(false)); connect(false); } else setNotice("MetaMask was not detected. You can inspect the interface, but blockchain actions require a wallet.", true); setInterval(() => { if (state.snapshot?.status === 1) { setText("countdown", countdown(state.snapshot.unlockTimestamp)); setText("distributionCountdown", countdown(state.snapshot.unlockTimestamp)); } }, 30000); }
+function init() { $("contractInput").value = getSavedAddress(); setupTheme(); setupNavigation(); setupForms(); if (window.ethereum) { window.ethereum.on("accountsChanged", accounts => { if (!accounts.length) { state.account = ""; state.signer = null; clearLoadedPlan(); updateConnection(); showToast("Wallet disconnected."); } else connect(false); }); window.ethereum.on("chainChanged", () => { clearLoadedPlan(); connect(false); }); connect(false); } else setNotice("MetaMask was not detected. You can inspect the interface, but blockchain actions require a wallet.", true); setInterval(() => { if (state.snapshot?.status === 1) { setText("countdown", countdown(state.snapshot.unlockTimestamp)); setText("distributionCountdown", countdown(state.snapshot.unlockTimestamp)); } }, 30000); }
 init();

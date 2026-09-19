@@ -1,4 +1,4 @@
-import { DEFAULT_CONTRACT_ADDRESS } from "./config.js";
+import { CONTRACT_STORAGE_KEY, DEFAULT_CONTRACT_ADDRESS } from "./config.js";
 
 export const ABI = [
   "function owner() view returns (address)",
@@ -37,7 +37,7 @@ export const ABI = [
 export const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
 
 export function getSavedAddress() {
-  return localStorage.getItem("inheritance.contractAddress") || DEFAULT_CONTRACT_ADDRESS;
+  return localStorage.getItem(CONTRACT_STORAGE_KEY) || DEFAULT_CONTRACT_ADDRESS;
 }
 
 export function normalizeAddress(ethers, value) {
@@ -78,7 +78,7 @@ export class ContractService {
   }
   setAddress(address) {
     this.address = normalizeAddress(this.ethers, address);
-    localStorage.setItem("inheritance.contractAddress", this.address);
+    localStorage.setItem(CONTRACT_STORAGE_KEY, this.address);
     const runner = this.signer || this.readProvider;
     this.contract = new this.ethers.Contract(this.address, ABI, runner);
   }

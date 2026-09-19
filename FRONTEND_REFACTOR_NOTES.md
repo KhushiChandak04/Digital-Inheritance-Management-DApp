@@ -11,8 +11,19 @@
 - `scripts/check-frontend.cjs`: no-dependency frontend build/check script.
 - `package.json`: added `frontend:check`, `frontend:build`, and `frontend:serve` scripts.
 - `README.md`: updated frontend architecture and local run instructions.
+- `frontend/config.js`, `frontend/app.js`, `frontend/contract-service.js`, and `frontend/index.html`: fixed deployment persistence and stale loaded-plan state after redeployment, wallet disconnect, and chain changes.
 
 The generated contract artifact already contained local deployment metadata and was not changed by the frontend implementation. Solidity, Truffle configuration, migrations, and tests were intentionally left intact.
+
+## Redeployment stale-state audit
+
+The audit inspected `config.js`, `app.js`, `contract-service.js`, `index.html`, all frontend `localStorage` access, contract-address initialization, wallet auto-reconnect, `accountsChanged`, `chainChanged`, and Settings' Load Plan flow.
+
+An actual stale-deployment defect existed: the default address still pointed to the previous deployment, and the unversioned persisted key could override it after a redeploy. The default now points to the current Ganache deployment (`0x3A3561F6b60f34677Ff7f5bC7111797D94324166`) and the storage key is versioned, so the old value is ignored. The loaded address is visibly labeled as the selected deployment.
+
+An actual stale-view defect also existed: a failed replacement load, wallet disconnect, or wrong-network transition could leave the previous contract-derived UI visible. The frontend now clears the snapshot, events, beneficiary list, and summary fields before replacing a deployment and when wallet/network state becomes invalid. `accountsChanged` still refreshes the same loaded deployment and recalculates role; it never changes the contract address.
+
+The connected MetaMask account and loaded contract remain separate state domains. No frontend file contains the previous hard-coded contract address after this fix.
 
 ## Architecture decisions
 
