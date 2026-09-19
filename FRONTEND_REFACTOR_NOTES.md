@@ -25,6 +25,49 @@ An actual stale-view defect also existed: a failed replacement load, wallet disc
 
 The connected MetaMask account and loaded contract remain separate state domains. No frontend file contains the previous hard-coded contract address after this fix.
 
+## Controlled UI/UX polish pass
+
+- Beneficiary registration now clears address, local label, and percentage fields only after confirmation, then returns focus to the address field.
+- Account changes update the displayed account and role immediately, show feedback, and refresh the same loaded deployment instead of restoring or replacing its address.
+- Lifecycle presentation now derives READY / ACTIVE, TIMED LOCK ACTIVE, DISTRIBUTION AVAILABLE, EXECUTED, and CANCELLED from contract status plus the latest blockchain block timestamp. Initiation and execution controls cannot remain actionable in contradictory states.
+- Countdown text uses the latest blockchain timestamp and `unlockTimestamp`; it is not persisted locally.
+- Transaction feedback distinguishes preparation, wallet approval, submitted/pending, confirmation, rejection, and failure.
+- Verification copy uses plain-language `OFF-CHAIN VERIFICATION`; the oracle model remains visible in blockchain details.
+- Loaded balances show synchronized status, and activity labels use human-readable deposit, verification, cancellation, and distribution wording.
+- Light/dark theme, desktop navigation, mobile navigation, all eight views, and horizontal overflow were smoke-tested.
+
+Remaining UI limitations: the live deployment used for validation is already executed, so READY, pending-lock, and unlocked action states were verified by code-path inspection rather than by sending or reverting transactions. No blockchain transactions were sent during this polish pass. Modal focus trapping and event-block timestamp resolution remain future accessibility/audit enhancements.
+
+## Comprehensive reconciliation checklist
+
+| Area | Result | Evidence / remaining scope |
+|---|---|---|
+| Wallet and loaded contract separation | DONE | Account switching updates wallet/role while retaining the loaded deployment; current browser smoke test confirmed both addresses remain distinct. |
+| Versioned deployment persistence | DONE | Current `0x3A3561...4166` deployment restored; legacy key removed; old address search returned no active-frontend match. |
+| Beneficiary validation and workflow | DONE | Checksum normalization, duplicate/owner/executor checks, field errors, ordinary percentages, confirmation, allocation refresh, and confirmed-submit form reset are implemented. |
+| Role-aware controls | DONE | Owner controls, executor initiation, public execution, beneficiary recognition, and unavailable-state hiding are derived from role and lifecycle. |
+| Lifecycle reconciliation | DONE | One lifecycle model drives badges, headings, helper copy, timeline, eligibility, countdown, and actions. Live executed state showed no initiate/execute actions. |
+| Blockchain time | DONE | Latest provider block timestamp is read before snapshot and during active countdown refresh; no countdown is stored locally. |
+| Verification/oracle copy | DONE | User-facing copy is off-chain verification; technical details expose the oracle model. |
+| Assets and activity | DONE | Valid loaded balance shows synchronized state; event descriptions are human-readable and include block-derived dates plus copyable hashes. |
+| Transaction feedback | DONE | Preparing, wallet approval, submitted/pending, confirmed, rejected, and failed paths are distinct. |
+| Consequential confirmation | DONE | Removal, allocation edit, executor change, cancellation, and execution use confirmation dialogs with consequences. |
+| Dialog accessibility | DONE | Initial focus moves to confirm, Escape closes, Tab is trapped among dialog controls, and focus returns to the trigger. |
+| Light/dark themes | DONE | Both themes were toggled and persisted; all eight views were visited. |
+| Responsive behavior | DONE | 390px mobile smoke test passed with no horizontal overflow and working navigation drawer; desktop views also had no overflow. |
+| READY / pending / unlocked / cancelled live transactions | PARTIAL | Lifecycle code paths are covered, but the current live contract is EXECUTED. No transactions or state-reset deployments were performed only for UI testing. |
+| Full automated accessibility audit | PARTIAL | Semantic labels, focus-visible styles, form labels, status regions, disabled styling, and modal keyboard behavior were checked. A dedicated axe audit is not installed. |
+
+## Final invariants
+
+- Solidity unchanged.
+- Truffle and Ganache configuration unchanged.
+- Migrations unchanged.
+- Frontend architecture unchanged.
+- No old contract address or legacy deployment key restored.
+- No blockchain transaction was sent during this final polish audit.
+- Existing verified allocation, deposit, timelock, and distribution behavior was not modified.
+
 ## Architecture decisions
 
 The frontend remains static rather than migrating the existing Truffle repository to React/Vite. This keeps the working contract toolchain and current Ganache state untouched while still separating responsibilities into an application controller, contract service, configuration, and styles.

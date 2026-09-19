@@ -37,6 +37,7 @@ export const ABI = [
 export const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
 
 export function getSavedAddress() {
+  localStorage.removeItem("inheritance.contractAddress");
   return localStorage.getItem(CONTRACT_STORAGE_KEY) || DEFAULT_CONTRACT_ADDRESS;
 }
 
@@ -95,6 +96,7 @@ export class ContractService {
     if (!this.contract) return [];
     const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
     const events = (await Promise.all(names.map(name => this.contract.queryFilter(this.contract.filters[name]())))).flat();
+    if (this.readProvider) await Promise.all(events.map(async event => { event.blockTimestamp = (await this.readProvider.getBlock(event.blockNumber)).timestamp; }));
     return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
   }
   write(method, args = [], overrides = {}) { return this.contract.connect(this.signer)[method](...args, overrides); }
