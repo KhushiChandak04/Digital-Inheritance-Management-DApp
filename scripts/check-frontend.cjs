@@ -9,6 +9,8 @@ const required = [
   "frontend/app.js",
   "frontend/contract-service.js",
   "frontend/config.js",
+  "frontend/brand-logo-dark.png",
+  "frontend/brand-logo-light.png",
   "frontend/index.backup.html",
 ];
 
@@ -25,8 +27,12 @@ for (const file of ["frontend/app.js", "frontend/contract-service.js", "frontend
 }
 
 const html = fs.readFileSync(path.join(root, "frontend/index.html"), "utf8");
-for (const reference of ["./styles.css", "./app.js", "ethers.umd.min.js"]) {
+const app = fs.readFileSync(path.join(root, "frontend/app.js"), "utf8");
+for (const reference of ["./styles.css", "./app.js", "./brand-logo-dark.png", "ethers.umd.min.js"]) {
   if (!html.includes(reference)) throw new Error(`Frontend entrypoint is missing ${reference}`);
+}
+for (const reference of ["./brand-logo-dark.png", "./brand-logo-light.png"]) {
+  if (!app.includes(reference)) throw new Error(`Frontend theme logic is missing ${reference}`);
 }
 
 for (const requiredId of ["connectBtn", "beneficiaryForm", "depositForm", "initiateBtn", "cancelBtn", "executeBtn", "contractForm"]) {

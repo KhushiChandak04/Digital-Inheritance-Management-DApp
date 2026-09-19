@@ -31,6 +31,8 @@ function setupTheme() {
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("inheritance.theme", theme);
+  const brandLogo = $("brandLogo");
+  if (brandLogo) brandLogo.src = theme === "light" ? "./brand-logo-light.png" : "./brand-logo-dark.png";
   setText("themeIcon", theme === "light" ? "☾" : "☼");
   setText("themeLabel", theme === "light" ? "Dark mode" : "Light mode");
   $("themeToggle")?.setAttribute("aria-label", `Switch to ${theme === "light" ? "dark" : "light"} theme`);
