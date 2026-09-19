@@ -83,7 +83,7 @@ Confirmed contract events are queried through the deployed contract and rendered
 - The contract does not store beneficiary display names, so labels are local to the current browser.
 - The contract does not expose a total-allocation view helper; the frontend calculates it from `getBeneficiaries()`.
 - The contract does not expose a historical deposit total separate from `totalDeposited`; the Assets view therefore reports current protected custody rather than lifetime deposits.
-- The current contract emits no explicit beneficiary-share-updated event. The activity feed can show the resulting state after refresh, but cannot reconstruct that update as a distinct historical event.
+- The frontend ABI/service was intentionally not changed during the contract-only hardening pass, so the new `BeneficiaryShareUpdated` event is available in the compiled contract but is not yet rendered by the existing frontend activity feed.
 - The frontend uses a local Ganache default address in `frontend/config.js` for this academic session. Settings/local storage can replace it after a new deployment.
 - Network acceptance is limited to common Ganache chain IDs `1337` and `5777`. A different local chain ID should be added to `EXPECTED_CHAIN_IDS` in `frontend/config.js`.
 - No blockchain transaction is initiated automatically by page load or refresh. Distribution remains an explicit user action.
@@ -92,11 +92,20 @@ Confirmed contract events are queried through the deployed contract and rendered
 
 These were intentionally not changed during this frontend pass:
 
-- Add duplicate-beneficiary protection inside Solidity, since frontend checks cannot protect direct contract callers.
-- Emit a `BeneficiaryShareUpdated` event for complete audit history.
+- The contract now rejects duplicate beneficiaries and owner/executor role conflicts on-chain.
+- The contract now emits `BeneficiaryShareUpdated`; frontend event rendering remains a separate future UI task.
 - Add an explicit lifetime deposit counter if reporting total deposits is required.
 - Replace the single executor with a multi-party verifier scheme for production-grade trust assumptions.
-- Consider a reentrancy guard and a formal security review before any deployment beyond an academic local prototype.
+- `executeInheritance` remains checks-effects-interactions safe for the current flow, but its sequential ETH calls are all-or-nothing: if any beneficiary rejects ETH, the whole execution reverts and all beneficiaries remain unpaid. A production design should consider a withdrawal/claim model or another failure-isolation strategy.
+- Consider a formal security review before any deployment beyond an academic local prototype.
+
+## Contract hardening pass
+
+- `addBeneficiary` now rejects duplicate wallets, the owner, and the current executor before allocation is changed.
+- `setExecutor` now rejects the zero address, owner, and any existing beneficiary.
+- `updateBeneficiaryShare` emits `BeneficiaryShareUpdated` with old and new basis-point values.
+- Allocation, status, timelock, cancellation, execution-once, and post-initiation configuration rules remain unchanged.
+- Added targeted tests for every new revert/event/invariant. The complete suite reports 15 passing tests.
 
 ## Run and test
 

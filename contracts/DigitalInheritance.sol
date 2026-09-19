@@ -58,6 +58,11 @@ contract DigitalInheritance {
     event PlanCreated(address indexed owner, address indexed executor, uint256 timelockDuration);
     event BeneficiaryAdded(address indexed wallet, uint256 percentageBasisPoints);
     event BeneficiaryRemoved(address indexed wallet);
+    event BeneficiaryShareUpdated(
+        address indexed wallet,
+        uint256 oldPercentageBasisPoints,
+        uint256 newPercentageBasisPoints
+    );
     event AssetsDeposited(address indexed from, uint256 amount);
     event ExecutorUpdated(address indexed newExecutor);
     event InheritanceInitiated(address indexed executor, uint256 activationTimestamp, uint256 unlockTimestamp);
@@ -119,9 +124,15 @@ contract DigitalInheritance {
         inStatus(PlanStatus.ACTIVE)
     {
         require(wallet != address(0), "Beneficiary cannot be zero address");
+        require(wallet != owner, "Owner cannot be a beneficiary");
+        require(wallet != executor, "Executor cannot be a beneficiary");
         require(percentageBasisPoints > 0, "Percentage must be greater than zero");
         require(_totalAllocatedBasisPoints() + percentageBasisPoints <= BASIS_POINTS_TOTAL,
             "Total allocation would exceed 100%");
+
+        for (uint256 i = 0; i < beneficiaries.length; i++) {
+            require(beneficiaries[i].wallet != wallet, "Beneficiary already exists");
+        }
 
         beneficiaries.push(Beneficiary(wallet, percentageBasisPoints));
         emit BeneficiaryAdded(wallet, percentageBasisPoints);
@@ -159,7 +170,13 @@ contract DigitalInheritance {
         require(withoutThisEntry + newPercentageBasisPoints <= BASIS_POINTS_TOTAL,
             "Total allocation would exceed 100%");
 
+        uint256 oldPercentageBasisPoints = beneficiaries[index].percentageBasisPoints;
         beneficiaries[index].percentageBasisPoints = newPercentageBasisPoints;
+        emit BeneficiaryShareUpdated(
+            beneficiaries[index].wallet,
+            oldPercentageBasisPoints,
+            newPercentageBasisPoints
+        );
     }
 
     /// @notice Reassigns the executor address. Only while the plan is ACTIVE.
@@ -169,6 +186,12 @@ contract DigitalInheritance {
         inStatus(PlanStatus.ACTIVE)
     {
         require(newExecutor != address(0), "Executor cannot be zero address");
+        require(newExecutor != owner, "Executor cannot be the owner");
+
+        for (uint256 i = 0; i < beneficiaries.length; i++) {
+            require(newExecutor != beneficiaries[i].wallet, "Executor cannot be a beneficiary");
+        }
+
         executor = newExecutor;
         emit ExecutorUpdated(newExecutor);
     }

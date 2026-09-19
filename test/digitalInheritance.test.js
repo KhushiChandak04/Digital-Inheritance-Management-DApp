@@ -1,5 +1,5 @@
 const DigitalInheritance = artifacts.require("DigitalInheritance");
-const { expectRevert, time } = require("@openzeppelin/test-helpers");
+const { expectEvent, expectRevert, time } = require("@openzeppelin/test-helpers");
 
 contract("DigitalInheritance", (accounts) => {
   const [owner, executor, beneficiaryA, beneficiaryB, beneficiaryC, stranger] = accounts;
@@ -37,6 +37,95 @@ contract("DigitalInheritance", (accounts) => {
     await expectRevert(
       contract.addBeneficiary(beneficiaryA, 5000, { from: stranger }),
       "Caller is not the owner"
+    );
+  });
+
+  it("rejects duplicate beneficiaries", async () => {
+    await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
+
+    await expectRevert(
+      contract.addBeneficiary(beneficiaryA, 1000, { from: owner }),
+      "Beneficiary already exists"
+    );
+  });
+
+  it("rejects the owner and executor as beneficiaries", async () => {
+    await expectRevert(
+      contract.addBeneficiary(owner, 1000, { from: owner }),
+      "Owner cannot be a beneficiary"
+    );
+
+    await expectRevert(
+      contract.addBeneficiary(executor, 1000, { from: owner }),
+      "Executor cannot be a beneficiary"
+    );
+  });
+
+  it("rejects assigning the executor role to the owner", async () => {
+    await expectRevert(
+      contract.setExecutor(owner, { from: owner }),
+      "Executor cannot be the owner"
+    );
+  });
+
+  it("rejects assigning the executor role to an existing beneficiary", async () => {
+    await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
+
+    await expectRevert(
+      contract.setExecutor(beneficiaryA, { from: owner }),
+      "Executor cannot be a beneficiary"
+    );
+  });
+
+  it("prevents an existing beneficiary from becoming executor after assignment", async () => {
+    await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
+    await contract.setExecutor(beneficiaryB, { from: owner });
+
+    await expectRevert(
+      contract.setExecutor(beneficiaryA, { from: owner }),
+      "Executor cannot be a beneficiary"
+    );
+  });
+
+  it("emits BeneficiaryShareUpdated when a share changes", async () => {
+    await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
+
+    const result = await contract.updateBeneficiaryShare(0, 4500, { from: owner });
+
+    expectEvent(result, "BeneficiaryShareUpdated", {
+      wallet: beneficiaryA,
+      oldPercentageBasisPoints: "4000",
+      newPercentageBasisPoints: "4500",
+    });
+  });
+
+  it("preserves allocation rules when updating a beneficiary share", async () => {
+    await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
+    await contract.addBeneficiary(beneficiaryB, 5000, { from: owner });
+
+    await expectRevert(
+      contract.updateBeneficiaryShare(0, 5001, { from: owner }),
+      "Total allocation would exceed 100%"
+    );
+
+    await contract.updateBeneficiaryShare(0, 5000, { from: owner });
+    const list = await contract.getBeneficiaries();
+    assert.equal(list[0].percentageBasisPoints.toString(), "5000");
+    assert.equal(list[1].percentageBasisPoints.toString(), "5000");
+  });
+
+  it("keeps owner configuration locked after inheritance starts", async () => {
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+
+    await expectRevert(
+      contract.setExecutor(beneficiaryB, { from: owner }),
+      "Invalid plan status for this action"
+    );
+    await expectRevert(
+      contract.updateBeneficiaryShare(0, 9000, { from: owner }),
+      "Invalid plan status for this action"
     );
   });
 
