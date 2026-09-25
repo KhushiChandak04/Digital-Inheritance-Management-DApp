@@ -71,6 +71,8 @@ contract DigitalInheritance {
     event AssetsDistributed(address indexed beneficiary, uint256 amount);
     event PlanExecuted(uint256 timestamp);
     event DocumentReferenceSet(string cidOrHash);
+    event CancelledAssetsWithdrawn(address indexed owner, uint256 amount);
+    event PlanReset(uint256 timestamp);
 
     // ---------------------------------------------------------------
     // Modifiers
@@ -305,6 +307,34 @@ contract DigitalInheritance {
         }
 
         emit PlanExecuted(block.timestamp);
+    }
+
+    /// @notice Recovers native ETH remaining after a cancelled inheritance.
+    function withdrawCancelledAssets() external onlyOwner inStatus(PlanStatus.CANCELLED) {
+        uint256 amount = address(this).balance;
+        require(amount > 0, "No cancelled assets to withdraw");
+
+        totalDeposited = 0;
+        (bool sent, ) = payable(owner).call{value: amount}("");
+        require(sent, "Cancelled asset withdrawal failed");
+        emit CancelledAssetsWithdrawn(owner, amount);
+    }
+
+    /// @notice Starts a new cycle after a completed or cancelled plan.
+    function resetPlan() external onlyOwner {
+        require(status == PlanStatus.EXECUTED || status == PlanStatus.CANCELLED,
+            "Plan must be executed or cancelled");
+        require(address(this).balance == 0, "Contract balance must be zero");
+
+        delete beneficiaries;
+        totalDeposited = 0;
+        activationTimestamp = 0;
+        unlockTimestamp = 0;
+        creationTimestamp = block.timestamp;
+        documentReference = "";
+        status = PlanStatus.ACTIVE;
+
+        emit PlanReset(block.timestamp);
     }
 
     // ---------------------------------------------------------------

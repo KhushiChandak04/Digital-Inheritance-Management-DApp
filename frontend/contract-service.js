@@ -23,6 +23,8 @@ export const ABI = [
   "function initiateInheritance()",
   "function cancelInheritance()",
   "function executeInheritance()",
+  "function withdrawCancelledAssets()",
+  "function resetPlan()",
   "event PlanCreated(address indexed owner,address indexed executor,uint256 timelockDuration)",
   "event BeneficiaryAdded(address indexed wallet,uint256 percentageBasisPoints)",
   "event BeneficiaryRemoved(address indexed wallet)",
@@ -33,7 +35,9 @@ export const ABI = [
   "event InheritanceCancelled(uint256 timestamp)",
   "event AssetsDistributed(address indexed beneficiary,uint256 amount)",
   "event PlanExecuted(uint256 timestamp)",
-  "event DocumentReferenceSet(string cidOrHash)"
+  "event DocumentReferenceSet(string cidOrHash)",
+  "event CancelledAssetsWithdrawn(address indexed owner,uint256 amount)",
+  "event PlanReset(uint256 timestamp)"
 ];
 
 export const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
@@ -62,6 +66,10 @@ export function readableError(error) {
   if (/allocations must total/i.test(reason)) return "Beneficiary allocations must total exactly 100% before verification.";
   if (/No assets deposited/i.test(reason)) return "Deposit protected assets before initiating inheritance.";
   if (/Transfer to beneficiary failed/i.test(reason)) return "A beneficiary transfer failed. No partial distribution was completed.";
+  if (/No cancelled assets to withdraw/i.test(reason)) return "There are no cancelled assets left to recover.";
+  if (/Contract balance must be zero/i.test(reason)) return "Recover the cancelled assets before resetting the plan.";
+  if (/Plan must be executed or cancelled/i.test(reason)) return "Reset is available only after execution or cancellation.";
+  if (/Cancelled asset withdrawal failed/i.test(reason)) return "Cancelled asset recovery failed.";
   return reason.replace(/^execution reverted:\s*/i, "").split("{", 1)[0].trim();
 }
 
@@ -103,7 +111,7 @@ export class ContractService {
   async getEvents() {
     const readContract = this.readContract || this.contract;
     if (!readContract) return [];
-    const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "TimelockDurationUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
+    const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "TimelockDurationUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet", "CancelledAssetsWithdrawn", "PlanReset"];
     const events = (await Promise.all(names.map(name => readContract.queryFilter(readContract.filters[name]())))).flat();
     if (this.readProvider) await Promise.all(events.map(async event => { event.blockTimestamp = (await this.readProvider.getBlock(event.blockNumber)).timestamp; }));
     return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
@@ -119,4 +127,6 @@ export class ContractService {
   initiateInheritance() { return this.write("initiateInheritance"); }
   cancelInheritance() { return this.write("cancelInheritance"); }
   executeInheritance() { return this.write("executeInheritance"); }
+  withdrawCancelledAssets() { return this.write("withdrawCancelledAssets"); }
+  resetPlan() { return this.write("resetPlan"); }
 }

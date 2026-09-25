@@ -249,4 +249,128 @@ contract("DigitalInheritance", (accounts) => {
       "Invalid plan status for this action"
     );
   });
+
+  it("resets an executed cycle and allows a second cycle", async () => {
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.setDocumentReference("ipfs://cycle-one", { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    await time.increase(THIRTY_DAYS + 1);
+    await contract.executeInheritance({ from: stranger });
+
+    const reset = await contract.resetPlan({ from: owner });
+    expectEvent(reset, "PlanReset");
+    assert.equal((await contract.getInheritanceStatus()).toString(), "0");
+    assert.equal((await contract.getBeneficiaries()).length, 0);
+    assert.equal((await contract.totalDeposited()).toString(), "0");
+    assert.equal((await contract.activationTimestamp()).toString(), "0");
+    assert.equal((await contract.unlockTimestamp()).toString(), "0");
+    assert.equal(await contract.documentReference(), "");
+    assert.equal((await contract.timelockDuration()).toString(), THIRTY_DAYS.toString());
+    assert.equal(await contract.owner(), owner);
+    assert.equal(await contract.executor(), executor);
+
+    await contract.addBeneficiary(beneficiaryB, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    assert.equal((await contract.getInheritanceStatus()).toString(), "1");
+    assert.equal((await contract.getBeneficiaries()).length, 1);
+  });
+
+  it("recovers cancelled assets before resetting the cycle", async () => {
+    const amount = web3.utils.toWei("1", "ether");
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: amount });
+    await contract.initiateInheritance({ from: executor });
+    await contract.cancelInheritance({ from: owner });
+
+    const withdrawal = await contract.withdrawCancelledAssets({ from: owner });
+    expectEvent(withdrawal, "CancelledAssetsWithdrawn", { owner, amount });
+    assert.equal((await web3.eth.getBalance(contract.address)).toString(), "0");
+    assert.equal((await contract.totalDeposited()).toString(), "0");
+
+    await contract.resetPlan({ from: owner });
+    assert.equal((await contract.getInheritanceStatus()).toString(), "0");
+    assert.equal((await contract.getBeneficiaries()).length, 0);
+
+    await contract.addBeneficiary(beneficiaryB, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: amount });
+    await contract.initiateInheritance({ from: executor });
+    assert.equal((await contract.getInheritanceStatus()).toString(), "1");
+  });
+
+  it("rejects reset from ACTIVE and VERIFICATION_PENDING", async () => {
+    await expectRevert(
+      contract.resetPlan({ from: owner }),
+      "Plan must be executed or cancelled"
+    );
+
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+
+    await expectRevert(
+      contract.resetPlan({ from: owner }),
+      "Plan must be executed or cancelled"
+    );
+  });
+
+  it("rejects reset while cancelled funds remain", async () => {
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    await contract.cancelInheritance({ from: owner });
+
+    await expectRevert(
+      contract.resetPlan({ from: owner }),
+      "Contract balance must be zero"
+    );
+  });
+
+  it("restricts cancelled-asset recovery to the owner and cancelled state", async () => {
+    await expectRevert(
+      contract.withdrawCancelledAssets({ from: owner }),
+      "Invalid plan status for this action"
+    );
+    await expectRevert(
+      contract.withdrawCancelledAssets({ from: stranger }),
+      "Caller is not the owner"
+    );
+
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    await expectRevert(
+      contract.withdrawCancelledAssets({ from: owner }),
+      "Invalid plan status for this action"
+    );
+
+    await contract.cancelInheritance({ from: owner });
+    await contract.withdrawCancelledAssets({ from: owner });
+    await expectRevert(
+      contract.withdrawCancelledAssets({ from: owner }),
+      "No cancelled assets to withdraw"
+    );
+  });
+
+  it("preserves configuration and clears all cycle state on reset", async () => {
+    await contract.setTimelockDuration(7 * DAY, { from: owner });
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.setDocumentReference("cycle-document", { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    await time.increase(7 * DAY + 1);
+    await contract.executeInheritance({ from: stranger });
+
+    await contract.resetPlan({ from: owner });
+    assert.equal((await contract.getInheritanceStatus()).toString(), "0");
+    assert.equal((await contract.totalDeposited()).toString(), "0");
+    assert.equal((await contract.activationTimestamp()).toString(), "0");
+    assert.equal((await contract.unlockTimestamp()).toString(), "0");
+    assert.equal((await contract.getBeneficiaryCount()).toString(), "0");
+    assert.equal(await contract.documentReference(), "");
+    assert.equal(await contract.owner(), owner);
+    assert.equal(await contract.executor(), executor);
+    assert.equal((await contract.timelockDuration()).toString(), (7 * DAY).toString());
+  });
 });

@@ -35,7 +35,7 @@ for (const reference of ["./brand-logo-dark.png", "./brand-logo-light.png"]) {
   if (!app.includes(reference)) throw new Error(`Frontend theme logic is missing ${reference}`);
 }
 
-for (const requiredId of ["connectBtn", "beneficiaryForm", "depositForm", "initiateBtn", "cancelBtn", "executeBtn", "contractForm", "timelockForm", "timelockSelect", "customTimelockInput"]) {
+for (const requiredId of ["connectBtn", "beneficiaryForm", "depositForm", "initiateBtn", "cancelBtn", "executeBtn", "contractForm", "timelockForm", "timelockSelect", "customTimelockInput", "withdrawCancelledBtn", "resetPlanBtn", "cycleStateHint"]) {
   if (!html.includes(`id=\"${requiredId}\"`)) throw new Error(`Frontend entrypoint is missing #${requiredId}`);
 }
 
