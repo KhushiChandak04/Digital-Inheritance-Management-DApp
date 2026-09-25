@@ -45,8 +45,8 @@ export function getSavedAddress() {
 
 export function normalizeAddress(ethers, value) {
   const input = String(value || "").trim();
-  if (!ethers.utils.isAddress(input)) throw new Error("Enter a valid Ethereum address.");
-  return ethers.utils.getAddress(input);
+  if (!/^0x[0-9a-f]{40}$/i.test(input)) throw new Error("Enter a valid Ethereum address.");
+  return ethers.utils.getAddress(input.toLowerCase());
 }
 
 export function readableError(error) {

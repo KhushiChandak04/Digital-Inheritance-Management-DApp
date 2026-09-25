@@ -39,4 +39,16 @@ for (const requiredId of ["connectBtn", "beneficiaryForm", "depositForm", "initi
   if (!html.includes(`id=\"${requiredId}\"`)) throw new Error(`Frontend entrypoint is missing #${requiredId}`);
 }
 
+const addressPattern = /^0x[0-9a-f]{40}$/i;
+for (const address of [
+  "0x22d491bde2303f2f43325b2108d26f1eaba1e32b",
+  "0X22D491BDE2303F2F43325B2108D26F1EABA1E32B",
+  "0x22D491bde2303f2f43325b2108d26f1eaba1e32b",
+]) {
+  if (!addressPattern.test(address)) throw new Error(`Valid address casing was rejected: ${address}`);
+}
+for (const address of ["0x1234", "0x22d491bde2303f2f43325b2108d26f1eaba1e3g", "not-an-address"]) {
+  if (addressPattern.test(address)) throw new Error(`Invalid address was accepted: ${address}`);
+}
+
 console.log("Frontend build check passed: entrypoint, modules, backup, and core action hooks are present.");
