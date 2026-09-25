@@ -17,6 +17,7 @@ export const ABI = [
   "function removeBeneficiary(uint256 index)",
   "function updateBeneficiaryShare(uint256 index,uint256 newPercentageBasisPoints)",
   "function setExecutor(address newExecutor)",
+  "function setTimelockDuration(uint256 newDuration)",
   "function setDocumentReference(string cidOrHash)",
   "function depositAssets() payable",
   "function initiateInheritance()",
@@ -27,6 +28,7 @@ export const ABI = [
   "event BeneficiaryRemoved(address indexed wallet)",
   "event AssetsDeposited(address indexed from,uint256 amount)",
   "event ExecutorUpdated(address indexed newExecutor)",
+  "event TimelockDurationUpdated(uint256 oldDuration,uint256 newDuration)",
   "event InheritanceInitiated(address indexed executor,uint256 activationTimestamp,uint256 unlockTimestamp)",
   "event InheritanceCancelled(uint256 timestamp)",
   "event AssetsDistributed(address indexed beneficiary,uint256 amount)",
@@ -94,7 +96,7 @@ export class ContractService {
   }
   async getEvents() {
     if (!this.contract) return [];
-    const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
+    const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "TimelockDurationUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
     const events = (await Promise.all(names.map(name => this.contract.queryFilter(this.contract.filters[name]())))).flat();
     if (this.readProvider) await Promise.all(events.map(async event => { event.blockTimestamp = (await this.readProvider.getBlock(event.blockNumber)).timestamp; }));
     return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
@@ -104,6 +106,7 @@ export class ContractService {
   removeBeneficiary(index) { return this.write("removeBeneficiary", [index]); }
   updateBeneficiary(index, bps) { return this.write("updateBeneficiaryShare", [index, bps]); }
   setExecutor(address) { return this.write("setExecutor", [address]); }
+  setTimelockDuration(seconds) { return this.write("setTimelockDuration", [seconds]); }
   setDocumentReference(value) { return this.write("setDocumentReference", [value]); }
   depositAssets(value) { return this.write("depositAssets", [], { value }); }
   initiateInheritance() { return this.write("initiateInheritance"); }

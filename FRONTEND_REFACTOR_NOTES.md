@@ -12,6 +12,7 @@
 - `package.json`: added `frontend:check`, `frontend:build`, and `frontend:serve` scripts.
 - `README.md`: updated frontend architecture and local run instructions.
 - `frontend/config.js`, `frontend/app.js`, `frontend/contract-service.js`, and `frontend/index.html`: fixed deployment persistence and stale loaded-plan state after redeployment, wallet disconnect, and chain changes.
+- Configurable timelock duration: the owner can select 7, 30, 90, 180, or 1–365 custom days while the plan is ACTIVE. The frontend converts days to seconds for `setTimelockDuration`, while the contract remains the source of truth for the displayed duration, unlock date, and blockchain-clock countdown. The control is locked after verification begins, and `TimelockDurationUpdated` appears in activity history.
 
 The generated contract artifact already contained local deployment metadata and was not changed by the frontend implementation. Solidity, Truffle configuration, migrations, and tests were intentionally left intact.
 
@@ -106,6 +107,13 @@ These were intentionally not changed during this frontend pass:
 - `updateBeneficiaryShare` emits `BeneficiaryShareUpdated` with old and new basis-point values.
 - Allocation, status, timelock, cancellation, execution-once, and post-initiation configuration rules remain unchanged.
 - Added targeted tests for every new revert/event/invariant. The complete suite reports 15 passing tests.
+
+## Configurable timelock pass
+
+- Added owner-only `setTimelockDuration(uint256)` restricted to the ACTIVE plan state.
+- Added `TimelockDurationUpdated(oldDuration, newDuration)` and frontend activity rendering with block-derived dates.
+- Added coverage for authorization, zero-duration rejection, event emission, selected 7-day and 90-day unlock timestamps, and post-initiation, post-cancellation, and post-execution locking.
+- The complete contract suite now reports 20 passing tests.
 
 ## Run and test
 

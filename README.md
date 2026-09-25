@@ -105,6 +105,11 @@ styles, an application controller, and a centralized contract service.
    initiate verification. Once the timelock has elapsed, any account can
    execute distribution.
 
+   The owner can configure the timelock from **Inheritance plan** while the
+   plan is active by choosing 7, 30, 90, 180, or a custom whole-number
+   duration from 1 to 365 days. Once verification begins, the selected
+   duration is fixed for that inheritance cycle.
+
 For a quick static preview, `frontend/index.html` can also be opened directly,
 although some browsers restrict ES modules from `file://` URLs.
 
@@ -125,6 +130,7 @@ files, architecture decisions, known limitations, and validation commands.
 | `removeBeneficiary` | owner | Removes a beneficiary before activation |
 | `updateBeneficiaryShare` | owner | Adjusts an existing beneficiary's share |
 | `setExecutor` | owner | Changes the authorized executor |
+| `setTimelockDuration` | owner | Changes the waiting period while the plan is active |
 | `depositAssets` | owner | Deposits ETH held for eventual distribution |
 | `initiateInheritance` | executor | Starts the timelock after off-chain verification |
 | `cancelInheritance` | owner | Cancels an in-progress inheritance during the timelock |

@@ -63,6 +63,7 @@ contract DigitalInheritance {
         uint256 oldPercentageBasisPoints,
         uint256 newPercentageBasisPoints
     );
+    event TimelockDurationUpdated(uint256 oldDuration, uint256 newDuration);
     event AssetsDeposited(address indexed from, uint256 amount);
     event ExecutorUpdated(address indexed newExecutor);
     event InheritanceInitiated(address indexed executor, uint256 activationTimestamp, uint256 unlockTimestamp);
@@ -194,6 +195,20 @@ contract DigitalInheritance {
 
         executor = newExecutor;
         emit ExecutorUpdated(newExecutor);
+    }
+
+    /// @notice Updates the waiting period used by the next inheritance cycle.
+    ///         Once inheritance is initiated, the duration and unlock time are fixed.
+    function setTimelockDuration(uint256 newDuration)
+        external
+        onlyOwner
+        inStatus(PlanStatus.ACTIVE)
+    {
+        require(newDuration > 0, "Timelock must be greater than zero");
+
+        uint256 oldDuration = timelockDuration;
+        timelockDuration = newDuration;
+        emit TimelockDurationUpdated(oldDuration, newDuration);
     }
 
     /// @notice Stores a reference (e.g. an IPFS CID or a document hash) to an

@@ -3,6 +3,7 @@ const { expectEvent, expectRevert, time } = require("@openzeppelin/test-helpers"
 
 contract("DigitalInheritance", (accounts) => {
   const [owner, executor, beneficiaryA, beneficiaryB, beneficiaryC, stranger] = accounts;
+  const DAY = 60 * 60 * 24;
   const THIRTY_DAYS = 60 * 60 * 24 * 30;
 
   let contract;
@@ -87,6 +88,27 @@ contract("DigitalInheritance", (accounts) => {
     );
   });
 
+  it("allows the owner to update the timelock while ACTIVE and emits an event", async () => {
+    const result = await contract.setTimelockDuration(7 * DAY, { from: owner });
+
+    expectEvent(result, "TimelockDurationUpdated", {
+      oldDuration: THIRTY_DAYS.toString(),
+      newDuration: (7 * DAY).toString(),
+    });
+    assert.equal((await contract.timelockDuration()).toString(), (7 * DAY).toString());
+  });
+
+  it("rejects unauthorized and zero-duration timelock updates", async () => {
+    await expectRevert(
+      contract.setTimelockDuration(7 * DAY, { from: stranger }),
+      "Caller is not the owner"
+    );
+    await expectRevert(
+      contract.setTimelockDuration(0, { from: owner }),
+      "Timelock must be greater than zero"
+    );
+  });
+
   it("emits BeneficiaryShareUpdated when a share changes", async () => {
     await contract.addBeneficiary(beneficiaryA, 4000, { from: owner });
 
@@ -125,6 +147,10 @@ contract("DigitalInheritance", (accounts) => {
     );
     await expectRevert(
       contract.updateBeneficiaryShare(0, 9000, { from: owner }),
+      "Invalid plan status for this action"
+    );
+    await expectRevert(
+      contract.setTimelockDuration(7 * DAY, { from: owner }),
       "Invalid plan status for this action"
     );
   });
@@ -170,6 +196,29 @@ contract("DigitalInheritance", (accounts) => {
     assert.equal((await contract.getInheritanceStatus()).toString(), "2"); // EXECUTED
   });
 
+  it("uses a selected 7-day duration for the unlock timestamp", async () => {
+    await contract.setTimelockDuration(7 * DAY, { from: owner });
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+
+    const result = await contract.initiateInheritance({ from: executor });
+    const initiated = result.logs.find(log => log.event === "InheritanceInitiated");
+
+    assert.equal(initiated.args.unlockTimestamp.toString(), (Number(initiated.args.activationTimestamp) + 7 * DAY).toString());
+    assert.equal((await contract.timelockDuration()).toString(), (7 * DAY).toString());
+  });
+
+  it("uses a selected 90-day duration for the unlock timestamp", async () => {
+    await contract.setTimelockDuration(90 * DAY, { from: owner });
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+
+    const result = await contract.initiateInheritance({ from: executor });
+    const initiated = result.logs.find(log => log.event === "InheritanceInitiated");
+
+    assert.equal(initiated.args.unlockTimestamp.toString(), (Number(initiated.args.activationTimestamp) + 90 * DAY).toString());
+  });
+
   it("allows the owner to cancel during the timelock window", async () => {
     await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
     await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
@@ -180,6 +229,23 @@ contract("DigitalInheritance", (accounts) => {
 
     await expectRevert(
       contract.executeInheritance({ from: stranger }),
+      "Invalid plan status for this action"
+    );
+    await expectRevert(
+      contract.setTimelockDuration(7 * DAY, { from: owner }),
+      "Invalid plan status for this action"
+    );
+  });
+
+  it("does not allow timelock changes after execution", async () => {
+    await contract.addBeneficiary(beneficiaryA, 10000, { from: owner });
+    await contract.depositAssets({ from: owner, value: web3.utils.toWei("1", "ether") });
+    await contract.initiateInheritance({ from: executor });
+    await time.increase(THIRTY_DAYS + 1);
+    await contract.executeInheritance({ from: stranger });
+
+    await expectRevert(
+      contract.setTimelockDuration(7 * DAY, { from: owner }),
       "Invalid plan status for this action"
     );
   });
