@@ -1,156 +1,193 @@
-# Digital Inheritance Management Prototype
+# Heirloom
 
-A blockchain-based prototype that demonstrates how a Solidity smart
-contract can automate the distribution of digital assets to predefined
-beneficiaries, according to fixed rules, once an authorized party confirms
-that the required real-world condition has been met.
+> A blockchain-based digital inheritance management DApp with beneficiary allocation, executor-controlled initiation, and configurable timelock protection.
 
-This project does not create or execute a legally binding will. It is an
-academic demonstration of programmable inheritance logic: role-based
-access control, percentage-based distribution, timelocked execution, and
-on-chain auditability.
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/license/mit)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?logo=solidity)](https://soliditylang.org/)
+[![Ethereum Sepolia](https://img.shields.io/badge/Network-Ethereum%20Sepolia-627eea?logo=ethereum)](https://sepolia.etherscan.io/)
 
-## Contents
+## Overview
 
-```
-inheritance-dapp/
-├── contracts/
-│   └── DigitalInheritance.sol   Core smart contract
-├── migrations/
-│   └── 2_deploy_inheritance.js  Truffle deployment script
-├── test/
-│   └── digitalInheritance.test.js
-├── frontend/
-│   ├── index.html               Application shell
-│   ├── app.js                   UI state and wallet lifecycle
-│   ├── contract-service.js      Centralized ethers.js contract service
-│   ├── styles.css               Responsive product styling
-│   └── index.backup.html        Original frontend backup
-├── truffle-config.js
-├── package.json
-└── README.md
+Heirloom is an academic prototype for managing predefined inheritance instructions on-chain. A single `DigitalInheritance.sol` contract records beneficiaries, percentage-based allocations, native ETH deposits, an authorized executor, and the plan lifecycle.
+
+The executor initiates inheritance after an off-chain verification step. A configurable timelock gives the owner an opportunity to cancel before anyone executes the final distribution. Contract events and lifecycle state provide a transparent on-chain history.
+
+## Architecture
+
+```text
+MetaMask
+   |
+   v
+DigitalInheritance.sol
+   |
+   v
+Ethereum Sepolia
 ```
 
-## Prerequisites
+The application uses one deployed inheritance contract. MetaMask provides wallet access and signs transactions; the frontend reads contract state through ethers.js and public JSON-RPC infrastructure.
 
-- Node.js (LTS release)
-- npm
-- Ganache (desktop application or `ganache-cli`)
-- MetaMask browser extension
-- Truffle: `npm install -g truffle`
+## Key Features
 
-## Setup
+- MetaMask wallet connection and account switching
+- Ethereum Sepolia support with local Ganache development support
+- Beneficiary registration, removal, and percentage updates
+- Allocation validation with a required 100% total before initiation
+- Owner-managed executor configuration
+- Native ETH deposits held by the contract
+- Configurable timelock duration from 1 to 365 whole days
+- Executor-controlled inheritance initiation
+- Owner cancellation during the active timelock
+- Public execution after the timelock expires
+- Transaction feedback, status badges, and lifecycle-aware actions
+- On-chain activity history from contract events
+- Responsive dashboard with light and dark themes
 
-1. Install dependencies:
+## How It Works
 
-   ```
-   npm install
-   ```
+```mermaid
+flowchart TD
+    A[OWNER: Configure beneficiaries] --> B[OWNER: Set allocation to 100%]
+    B --> C[OWNER: Deposit native ETH]
+    C --> D[EXECUTOR: Initiate inheritance]
+    D --> E[TIMELOCK: Owner review window]
+    E --> F{Owner cancels?}
+    F -->|Yes| G[CANCELLED]
+    F -->|No, after unlock| H[ANY ACCOUNT: Execute distribution]
+    H --> I[Beneficiaries receive their allocations]
+```
 
-2. Start a local blockchain with Ganache and note the RPC port (default
-   `7545` for the desktop app, `8545` for `ganache-cli`). Update
-   `truffle-config.js` if your port differs.
+## Lifecycle
 
-3. Compile the contract:
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE
+    ACTIVE --> VERIFICATION_PENDING: executor initiates
+    VERIFICATION_PENDING --> EXECUTED: timelock elapsed
+    VERIFICATION_PENDING --> CANCELLED: owner cancels
+```
 
-   ```
-   truffle compile
-   ```
+## Security and Design Notes
 
-4. Deploy to your local network:
+- Owner-only modifiers protect beneficiary, executor, document, deposit, and timelock configuration.
+- Only the configured executor can initiate inheritance.
+- Beneficiary addresses must be valid, non-zero, unique, and different from the owner and executor.
+- Percentage allocations must be positive and cannot exceed 100% in total; initiation requires exactly 100%.
+- Status-based restrictions prevent configuration after initiation, repeated execution, and cancellation outside the timelock state.
+- Distribution updates status and clears the tracked deposit before external ETH transfers, following checks-effects-interactions ordering.
+- The timelock duration can be changed only while the plan is `ACTIVE`; the unlock timestamp is fixed when initiation occurs.
+- The contract uses the blockchain timestamp as the source of truth for the timelock. The frontend synchronizes countdowns with the latest block timestamp.
 
-   ```
-   truffle migrate --reset
-   ```
+This is an academic prototype and has not undergone a professional security audit.
 
-   Note the deployed contract address printed in the migration output.
+## Tech Stack
 
-5. Run the test suite:
+[![Tech Stack](https://skillicons.dev/icons?i=solidity,ethereum,javascript,html,css,nodejs,git,github)](https://skillicons.dev)
 
-   ```
-   truffle test
-   ```
+| Layer | Technology |
+| --- | --- |
+| Smart contract | Solidity 0.8.20 |
+| Blockchain | Ethereum Sepolia; Ganache for local development |
+| Development framework | Truffle |
+| Frontend | Static HTML, CSS, and JavaScript |
+| Wallet | MetaMask |
+| Web3 library | ethers.js 5.7 via CDN |
+| Contract testing | Mocha/Truffle with `@openzeppelin/test-helpers` |
 
-## Using the Frontend
+## Project Structure
 
-The frontend remains a static application so it can be demonstrated without
-migrating the Truffle project or resetting Ganache. It is split into a shell,
-styles, an application controller, and a centralized contract service.
+```text
+contracts/
+  DigitalInheritance.sol
+migrations/
+  2_deploy_inheritance.js
+test/
+  digitalInheritance.test.js
+frontend/
+  index.html
+  index.backup.html
+  app.js
+  contract-service.js
+  config.js
+  styles.css
+scripts/
+  check-frontend.cjs
+build/contracts/
+  DigitalInheritance.json
+truffle-config.js
+package.json
+README.md
+```
 
-1. Run the frontend check/build command:
+## Installation and Local Development
 
-   ```
-   npm run frontend:build
-   ```
+### Prerequisites
 
-2. Serve the frontend over HTTP (recommended for ES modules):
+- Node.js and npm
+- Ganache
+- MetaMask
 
-   ```
-   npm run frontend:serve
-   ```
+### Install and test
 
-   Then open `http://127.0.0.1:4173`.
+```bash
+npm install
+npm test
+npm run frontend:build
+```
 
-3. Import one or more Ganache private keys into MetaMask and connect
-   MetaMask to the Ganache network (RPC URL `http://127.0.0.1:7545`,
-   chain ID as reported by Ganache).
-4. Click **Connect wallet**. The frontend attempts to reconnect to an
-   already-authorized account after reload and reacts to account or network
-   changes.
-5. Confirm the deployed contract address under **Settings**. The current
-   local address is prefilled from `frontend/config.js`; the selected address
-   is saved in browser local storage and is not embedded into contract logic.
-6. Use the owner account to manage beneficiaries, allocations, document
-   reference, executor, and protected ETH. Switch to the executor account to
-   initiate verification. Once the timelock has elapsed, any account can
-   execute distribution.
+### Run Ganache locally
 
-   The owner can configure the timelock from **Inheritance plan** while the
-   plan is active by choosing 7, 30, 90, 180, or a custom whole-number
-   duration from 1 to 365 days. Once verification begins, the selected
-   duration is fixed for that inheritance cycle.
+Start the deterministic local chain on port `7545`:
 
-For a quick static preview, `frontend/index.html` can also be opened directly,
-although some browsers restrict ES modules from `file://` URLs.
+```bash
+npm run ganache:heirloom
+```
 
-The interface validates addresses, detects duplicate and conflicting roles,
-normalizes mixed-case input, shows allocation progress, translates common
-transaction errors, and displays confirmed contract events as an activity
-feed. Beneficiary display names are deliberately stored only in this browser;
-the deployed contract stores wallet addresses and percentages, not labels.
+In another terminal, compile and deploy the local contract:
 
-See [FRONTEND_REFACTOR_NOTES.md](FRONTEND_REFACTOR_NOTES.md) for the changed
-files, architecture decisions, known limitations, and validation commands.
+```bash
+npm run compile
+npm run migrate
+```
 
-## Core Contract Behavior
+### Serve the frontend
 
-| Function | Caller | Purpose |
-|---|---|---|
-| `addBeneficiary` | owner | Registers a beneficiary and their share (basis points, 10000 = 100%) |
-| `removeBeneficiary` | owner | Removes a beneficiary before activation |
-| `updateBeneficiaryShare` | owner | Adjusts an existing beneficiary's share |
-| `setExecutor` | owner | Changes the authorized executor |
-| `setTimelockDuration` | owner | Changes the waiting period while the plan is active |
-| `depositAssets` | owner | Deposits ETH held for eventual distribution |
-| `initiateInheritance` | executor | Starts the timelock after off-chain verification |
-| `cancelInheritance` | owner | Cancels an in-progress inheritance during the timelock |
-| `executeInheritance` | anyone | Distributes funds once the timelock has elapsed |
+```bash
+npm run frontend:serve
+```
 
-## Local vs Sepolia
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173). For ES module support, use the HTTP server rather than opening the page directly from `file://`.
 
-The repository remains configured for local Ganache development by default. A separate Sepolia configuration is prepared as a public-safe placeholder without embedding private keys, seed phrases, or secrets. The actual Sepolia deployment remains a future manual step after the project is migrated to Vercel or another hosting provider.
+## Sepolia Deployment
 
-## Important Limitation
+To use the public deployment, switch MetaMask to Ethereum Sepolia:
 
-The contract has no ability to independently verify that the owner has
-died. This is the blockchain oracle problem: real-world events are not
-natively observable on-chain. The prototype addresses this by requiring
-an authorized executor to attest, off-chain, that the condition has been
-met, and by adding a timelock so the owner can intervene if the
-attestation was made in error. A production system would likely replace
-the single executor with a multi-party verification scheme (see the
-project guide for a suggested 2-of-3 extension).
+- Chain ID: `11155111`
+- Contract address: `<SEPOLIA_CONTRACT_ADDRESS>`
+
+The frontend configuration contains the public deployment address and public read-RPC configuration. Wallet transactions are signed by MetaMask. Private keys, deployment credentials, and RPC API keys must remain outside the frontend and README, such as in a local `.env` file used only by deployment tooling.
+
+The deployed contract must not be redeployed for normal frontend use. Load the configured address from the Settings view if the browser has a different saved deployment address.
+
+## Demo Flow
+
+1. Connect MetaMask to Ethereum Sepolia.
+2. Load the deployed plan from **Settings**.
+3. As the owner, configure the executor and beneficiaries.
+4. Set beneficiary allocations to exactly 100%.
+5. Deposit native ETH into the plan.
+6. Choose a timelock duration while the plan is active.
+7. Switch to the executor account and initiate inheritance after off-chain verification.
+8. Observe the timelock and review window.
+9. Cancel as the owner if intervention is required, or wait for the unlock time.
+10. Execute the distribution from any account after the timelock expires.
+
+## Limitations
+
+- This is an academic prototype, not a legally binding will.
+- A blockchain cannot independently determine whether death or another real-world eligibility condition has occurred. The authorized executor and the off-chain verification process provide that attestation in this prototype.
+- Beneficiary display labels are stored locally in the browser and are not written to the contract.
+- A professional security audit has not been performed.
 
 ## License
 
-MIT, for academic use.
+MIT License
