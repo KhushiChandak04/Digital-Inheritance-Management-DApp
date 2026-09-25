@@ -112,7 +112,7 @@ export class ContractService {
     const readContract = this.readContract || this.contract;
     if (!readContract) return [];
     const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "TimelockDurationUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet", "CancelledAssetsWithdrawn", "PlanReset"];
-    const events = (await Promise.all(names.map(name => readContract.queryFilter(readContract.filters[name]())))).flat();
+    const events = (await Promise.all(names.map(name => readContract.queryFilter(readContract.filters[name](), 11780676, "latest")))).flat();
     if (this.readProvider) await Promise.all(events.map(async event => { event.blockTimestamp = (await this.readProvider.getBlock(event.blockNumber)).timestamp; }));
     return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
   }
