@@ -1,4 +1,4 @@
-import { CONTRACT_STORAGE_KEY, DEFAULT_CONTRACT_ADDRESS } from "./config.js";
+import { CONTRACT_STORAGE_KEY, DEFAULT_CONTRACT_ADDRESS, NETWORK_CONFIG, SEPOLIA_CHAIN_ID } from "./config.js";
 
 export const ABI = [
   "function owner() view returns (address)",

@@ -50,6 +50,7 @@ function setupNavigation() {
   $("menuBtn").addEventListener("click", () => $("sidebar").classList.toggle("open"));
   $("primaryAction").addEventListener("click", () => navigate(isOwner() ? "beneficiaries" : "verification"));
 }
+
 function navigate(page) {
   state.page = page;
   qa(".page").forEach(section => section.classList.toggle("active", section.dataset.view === page));
@@ -74,7 +75,11 @@ async function connect(request = false) {
     service.setProvider(state.provider); service.setSigner(state.signer);
     updateConnection(); if (previousAccount && previousAccount.toLowerCase() !== state.account.toLowerCase()) { showToast(`Connected account changed to ${shortAddress(state.account)}.`); }
     if (state.snapshot) renderPermissions();
-    if (state.networkOk) { if (service.address) await refreshAll(); else await loadContract(getSavedAddress()); } else { clearLoadedPlan(); showWrongNetwork(); }
+    if (state.networkOk) {
+      if (service.address) await refreshAll(); else await loadContract(getSavedAddress());
+    } else {
+      clearLoadedPlan(); showWrongNetwork();
+    }
   } catch (error) { const message = readableError(error); setNotice(message, true); showToast(message, true); }
 }
 function updateConnection() { setText("walletLabel", state.account ? shortAddress(state.account) : "Connect wallet"); setText("networkLabel", state.networkOk ? EXPECTED_NETWORK_LABEL : state.chainId ? `Chain ${state.chainId}` : "Network unavailable"); $("networkChip").classList.toggle("wrong", !state.networkOk); setText("roleValue", getRole()); setText("roleHint", state.account ? "Permissions update with your wallet" : "Connect to see permissions"); }

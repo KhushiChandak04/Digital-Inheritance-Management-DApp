@@ -6,6 +6,7 @@
     "compile": "truffle compile",
     "migrate": "truffle migrate --reset",
     "test": "truffle test",
+    "ganache:heirloom": "npx ganache --server.port 7545 --database.dbPath ./.ganache-heirloom --wallet.deterministic",
     "frontend:check": "node scripts/check-frontend.cjs",
     "frontend:build": "npm run frontend:check",
     "frontend:serve": "npx http-server frontend -p 4173 -c-1"

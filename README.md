@@ -136,6 +136,10 @@ files, architecture decisions, known limitations, and validation commands.
 | `cancelInheritance` | owner | Cancels an in-progress inheritance during the timelock |
 | `executeInheritance` | anyone | Distributes funds once the timelock has elapsed |
 
+## Local vs Sepolia
+
+The repository remains configured for local Ganache development by default. A separate Sepolia configuration is prepared as a public-safe placeholder without embedding private keys, seed phrases, or secrets. The actual Sepolia deployment remains a future manual step after the project is migrated to Vercel or another hosting provider.
+
 ## Important Limitation
 
 The contract has no ability to independently verify that the owner has
