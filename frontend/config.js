@@ -1,10 +1,10 @@
-export const DEFAULT_CONTRACT_ADDRESS = "0xe3eEC5619ec9189E5d27F258Ca68A5c85136E4A6";
+export const DEFAULT_CONTRACT_ADDRESS = "0x58887563f42aA1252702b600aeAE58B0a6F0f7DB";
 export const CONTRACT_STORAGE_KEY = "inheritance.contractAddress.v2";
 export const EXPECTED_CHAIN_IDS = [1337, 5777, 11155111];
-export const EXPECTED_NETWORK_LABEL = "Ganache local";
+export const EXPECTED_NETWORK_LABEL = "Sepolia";
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_NETWORK_LABEL = "Sepolia";
-export const EXPLORER_BASE_URL = "";
+export const EXPLORER_BASE_URL = "https://sepolia.etherscan.io";
 
 export const NETWORK_CONFIG = {
   local: {
@@ -15,6 +15,7 @@ export const NETWORK_CONFIG = {
   sepolia: {
     label: "Sepolia",
     chainId: 11155111,
-    rpcUrl: "https://sepolia.gateway.tenderly.co",
+    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/demo",
+    fallbackRpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
   },
 };

@@ -22571,6 +22571,12 @@
     "version": "0.8.20+commit.a1b79de6.Emscripten.clang"
   },
   "networks": {
+    "11155111": {
+      "events": {},
+      "links": {},
+      "address": "0x58887563f42aA1252702b600aeAE58B0a6F0f7DB",
+      "transactionHash": "0x2149694ed0d5e31ef4199d22f6a055b95ff5e09245762f211a662b967d364189"
+    },
     "1788605562455": {
       "events": {},
       "links": {},
@@ -23005,7 +23011,7 @@
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2026-09-25T14:09:14.126Z",
+  "updatedAt": "2026-09-25T15:15:03.598Z",
   "networkType": "ethereum",
   "devdoc": {
     "details": "This contract does NOT determine whether a person has died.         It relies on an authorized executor (or, in the extended         version, a set of verifiers) to attest that the real-world         condition for inheritance has been satisfied. This is a         deliberate design choice made to address the blockchain         \"oracle problem\" honestly rather than pretend it can be         solved on-chain.",

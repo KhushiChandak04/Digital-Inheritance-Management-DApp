@@ -12,7 +12,9 @@
     "frontend:serve": "npx http-server frontend -p 4173 -c-1"
   },
   "devDependencies": {
-    "truffle": "^5.11.5",
-    "@openzeppelin/test-helpers": "^0.5.16"
+    "@openzeppelin/test-helpers": "^0.5.16",
+    "@truffle/hdwallet-provider": "^2.1.15",
+    "dotenv": "^18.0.3",
+    "truffle": "^5.11.5"
   }
 }

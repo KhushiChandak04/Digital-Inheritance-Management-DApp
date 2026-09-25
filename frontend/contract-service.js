@@ -69,12 +69,16 @@ export class ContractService {
   constructor(ethers) {
     this.ethers = ethers;
     this.readProvider = null;
+    this.readContract = null;
     this.signer = null;
     this.contract = null;
     this.address = "";
   }
 
-  setProvider(provider) { this.readProvider = provider; }
+  setProvider(provider) {
+    this.readProvider = provider;
+    if (this.address) this.readContract = new this.ethers.Contract(this.address, ABI, provider);
+  }
   setSigner(signer) {
     this.signer = signer;
     if (this.address) this.contract = new this.ethers.Contract(this.address, ABI, signer);
@@ -84,20 +88,23 @@ export class ContractService {
     localStorage.setItem(CONTRACT_STORAGE_KEY, this.address);
     const runner = this.signer || this.readProvider;
     this.contract = new this.ethers.Contract(this.address, ABI, runner);
+    this.readContract = new this.ethers.Contract(this.address, ABI, this.readProvider || runner);
   }
   async readSnapshot() {
     if (!this.contract) throw new Error("Load a deployed contract first.");
+    const readContract = this.readContract || this.contract;
     const [owner, executor, totalDeposited, timelockDuration, activationTimestamp, unlockTimestamp, creationTimestamp, documentReference, status, beneficiaries] = await Promise.all([
-      this.contract.owner(), this.contract.executor(), this.contract.totalDeposited(), this.contract.timelockDuration(),
-      this.contract.activationTimestamp(), this.contract.unlockTimestamp(), this.contract.creationTimestamp(),
-      this.contract.documentReference(), this.contract.getInheritanceStatus(), this.contract.getBeneficiaries()
+      readContract.owner(), readContract.executor(), readContract.totalDeposited(), readContract.timelockDuration(),
+      readContract.activationTimestamp(), readContract.unlockTimestamp(), readContract.creationTimestamp(),
+      readContract.documentReference(), readContract.getInheritanceStatus(), readContract.getBeneficiaries()
     ]);
     return { owner, executor, totalDeposited, timelockDuration, activationTimestamp, unlockTimestamp, creationTimestamp, documentReference, status: Number(status), beneficiaries };
   }
   async getEvents() {
-    if (!this.contract) return [];
+    const readContract = this.readContract || this.contract;
+    if (!readContract) return [];
     const names = ["PlanCreated", "BeneficiaryAdded", "BeneficiaryRemoved", "AssetsDeposited", "ExecutorUpdated", "TimelockDurationUpdated", "InheritanceInitiated", "InheritanceCancelled", "AssetsDistributed", "PlanExecuted", "DocumentReferenceSet"];
-    const events = (await Promise.all(names.map(name => this.contract.queryFilter(this.contract.filters[name]())))).flat();
+    const events = (await Promise.all(names.map(name => readContract.queryFilter(readContract.filters[name]())))).flat();
     if (this.readProvider) await Promise.all(events.map(async event => { event.blockTimestamp = (await this.readProvider.getBlock(event.blockNumber)).timestamp; }));
     return events.sort((a, b) => b.blockNumber - a.blockNumber || b.transactionIndex - a.transactionIndex);
   }

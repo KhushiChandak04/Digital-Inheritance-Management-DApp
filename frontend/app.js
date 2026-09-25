@@ -1,5 +1,5 @@
 import { ContractService, STATUS_NAMES, getSavedAddress, normalizeAddress, readableError } from "./contract-service.js";
-import { EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL } from "./config.js";
+import { EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL, NETWORK_CONFIG } from "./config.js";
 
 const { ethers } = window;
 const service = new ContractService(ethers);
@@ -51,6 +51,14 @@ function setupNavigation() {
   $("primaryAction").addEventListener("click", () => navigate(isOwner() ? "beneficiaries" : "verification"));
 }
 
+function createReadProvider(chainId, walletProvider) {
+  if (chainId !== 11155111) return walletProvider;
+  const config = NETWORK_CONFIG.sepolia;
+  const urls = [config.rpcUrl, ...(config.fallbackRpcUrls || [])];
+  const providers = urls.map(url => new ethers.providers.JsonRpcProvider(url, chainId));
+  return new ethers.providers.FallbackProvider(providers, 1);
+}
+
 function navigate(page) {
   state.page = page;
   qa(".page").forEach(section => section.classList.toggle("active", section.dataset.view === page));
@@ -72,7 +80,7 @@ async function connect(request = false) {
     state.signer = state.provider.getSigner(accounts[0]);
     state.account = ethers.utils.getAddress(accounts[0]);
     const network = await state.provider.getNetwork(); state.chainId = Number(network.chainId); state.networkOk = EXPECTED_CHAIN_IDS.includes(state.chainId);
-    service.setProvider(state.provider); service.setSigner(state.signer);
+    service.setProvider(createReadProvider(state.chainId, state.provider)); service.setSigner(state.signer);
     updateConnection(); if (previousAccount && previousAccount.toLowerCase() !== state.account.toLowerCase()) { showToast(`Connected account changed to ${shortAddress(state.account)}.`); }
     if (state.snapshot) renderPermissions();
     if (state.networkOk) {
