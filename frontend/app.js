@@ -24,6 +24,14 @@ function setFieldError(id, message) { const node = $(id); if (node) node.textCon
 function saveLabels() { localStorage.setItem("inheritance.labels", JSON.stringify(state.labels)); }
 function labelFor(address) { return state.labels[address.toLowerCase()] || "Unnamed recipient"; }
 function setText(id, value) { if ($(id)) $(id).textContent = value; }
+function effectiveChainTimestamp() {
+  if (state.chainTimestamp === null) return null;
+  const blockchainSeconds = Number(state.chainTimestamp);
+  if (!state.chainClockAnchor || state.chainClockAnchor.blockTimestamp !== blockchainSeconds) {
+    state.chainClockAnchor = { blockTimestamp: blockchainSeconds, localMs: performance.now() };
+  }
+  return blockchainSeconds + (performance.now() - state.chainClockAnchor.localMs) / 1000;
+}
 function durationDays(seconds) { return Number(seconds) / DAY_SECONDS; }
 function formatDuration(seconds) { const totalSeconds = Number(seconds); if (totalSeconds === 30) return "30 seconds"; const days = durationDays(totalSeconds); return `${days} day${days === 1 ? "" : "s"}`; }
 function setTimelockControl(seconds) { const totalSeconds = Number(seconds); const select = $("timelockSelect"); const custom = $("customTimelockInput"); if (!select || !custom) return; if (totalSeconds === 30) { select.value = "30s"; custom.value = ""; $("customTimelockWrap").classList.add("hidden"); return; } const days = durationDays(totalSeconds); const preset = PRESET_TIMELOCK_DAYS.includes(days); select.value = preset ? String(days) : "custom"; custom.value = preset ? "" : String(days); $("customTimelockWrap").classList.toggle("hidden", preset); }
@@ -136,8 +144,26 @@ function render() {
   const progress = data.status === 1 ? Math.min(100, Math.max(0, (Date.now() / 1000 - Number(data.activationTimestamp)) / (Number(data.unlockTimestamp) - Number(data.activationTimestamp)) * 100)) : data.status > 1 ? 100 : 0; setText("countdown", data.status === 1 ? countdown(data.unlockTimestamp) : "—"); $("timelockProgress").classList.toggle("complete", progress >= 100); renderBeneficiaries(); renderPermissions(); renderLabels();
 }
 function nextAction(status, allocated) { if (!state.account) return "Connect a wallet to begin."; if (status === "ACTIVE" && isOwner() && allocated < 100) return `Add ${ (100 - allocated).toFixed(2)}% to complete allocation.`; if (status === "ACTIVE" && isExecutor()) return "Review the off-chain condition, then initiate verification."; if (status === "VERIFICATION_PENDING") return "Review the timelock before distribution."; if (status === "EXECUTED") return "Distribution has been completed."; if (status === "CANCELLED") return "This plan was cancelled."; return "Review the plan details."; }
-function countdown(unlock) { if (state.chainTimestamp === null) return "Syncing blockchain clock…"; const diff = Number(unlock) - state.chainTimestamp; if (diff <= 0) return "Ready to distribute"; const days = Math.floor(diff / 86400); const hours = Math.floor((diff % 86400) / 3600); const minutes = Math.floor((diff % 3600) / 60); const seconds = Math.floor(diff % 60); return `${days}d ${hours}h ${minutes}m ${seconds}s`; }
-function lifecycleFor(data = state.snapshot) { if (!data) return "NOT_LOADED"; if (data.status === 0) return "READY"; if (data.status === 1) return Number(data.unlockTimestamp) <= (state.chainTimestamp || 0) ? "UNLOCKED" : "TIMED_LOCK_ACTIVE"; if (data.status === 2) return "EXECUTED"; return "CANCELLED"; }
+function countdown(unlock) {
+  const now = effectiveChainTimestamp();
+  if (now === null) return "Syncing blockchain clock…";
+  const diff = Number(unlock) - now;
+  if (diff <= 0) return "Ready to distribute";
+  const totalSeconds = Math.floor(diff);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+}
+function lifecycleFor(data = state.snapshot) {
+  if (!data) return "NOT_LOADED";
+  const now = effectiveChainTimestamp() ?? 0;
+  if (data.status === 0) return "READY";
+  if (data.status === 1) return Number(data.unlockTimestamp) <= now ? "UNLOCKED" : "TIMED_LOCK_ACTIVE";
+  if (data.status === 2) return "EXECUTED";
+  return "CANCELLED";
+}
 function applyLifecycleState() {
   const lifecycle = lifecycleFor();
   if (!state.snapshot) return;
@@ -184,6 +210,13 @@ async function copy(value) { try { await navigator.clipboard.writeText(value); s
 function eventDescription(event) { const name = event.event; const args = event.args || {}; const address = args.wallet || args.from || args.beneficiary || args.newExecutor || ""; const amount = args.amount ? `${ethers.utils.formatEther(args.amount)} ETH` : ""; return { PlanCreated: "Plan created", BeneficiaryAdded: `Beneficiary added · ${shortAddress(address)}`, BeneficiaryRemoved: `Beneficiary removed · ${shortAddress(address)}`, AssetsDeposited: `Deposit received · ${amount}`, ExecutorUpdated: `Executor updated · ${shortAddress(address)}`, TimelockDurationUpdated: `Timelock duration updated · ${formatDuration(args.oldDuration)} → ${formatDuration(args.newDuration)}`, InheritanceInitiated: "Verification initiated · timelock started", InheritanceCancelled: "Inheritance cancelled", AssetsDistributed: `Distribution executed · ${amount}`, PlanExecuted: "Distribution executed", DocumentReferenceSet: "Document reference updated", CancelledAssetsWithdrawn: `Cancelled assets recovered · ${amount}`, PlanReset: "Plan reset" }[name] || name; }
 function renderActivity() { const target = $("activityList"), recent = $("recentActivity"); const content = state.events.length ? state.events.slice(0, state.page === "activity" ? 50 : 4).map(event => `<div class="activity-item"><span class="activity-marker">${event.event === "PlanExecuted" ? "✓" : "•"}</span><div><strong>${escapeHtml(eventDescription(event))}</strong><small>Block ${event.blockNumber} · ${escapeHtml(formatDate(event.blockTimestamp))} · <button class="text-button" data-copy="${event.transactionHash}">Copy transaction</button></small></div><time>${escapeHtml(formatDate(event.blockTimestamp))}</time></div>`).join("") : `<div class="empty-state">No confirmed activity found for this deployment.</div>`; if (target) target.innerHTML = content; if (recent) recent.innerHTML = state.events.length ? state.events.slice(0, 4).map(event => `<div class="activity-item"><span class="activity-marker">•</span><div><strong>${escapeHtml(eventDescription(event))}</strong><small>${escapeHtml(formatDate(event.blockTimestamp))}</small></div><time>On-chain</time></div>`).join("") : `<div class="empty-state">No confirmed activity found for this deployment.</div>`; qa("[data-copy]").forEach(button => button.addEventListener("click", () => copy(button.dataset.copy))); }
 
+let lastBlockchainSync = 0;
+function renderLiveCountdown() {
+  if (!state.snapshot || state.snapshot.status !== 1) return;
+  const text = countdown(state.snapshot.unlockTimestamp);
+  setText("countdown", text);
+  setText("distributionCountdown", text);
+}
 function setupTimelockForm() {
   const form = $("timelockForm");
   if (!form) return;
@@ -212,5 +245,28 @@ function setupForms() {
 
 function init() { $("contractInput").value = getSavedAddress(); ensureActionHints(); const verificationEyebrow = q('[data-view="verification"] .verification-banner .eyebrow'); if (verificationEyebrow) verificationEyebrow.textContent = "OFF-CHAIN VERIFICATION"; const verificationStart = q('[data-view="verification"] .timeline.compact .timeline-item:first-child'); if (verificationStart) { verificationStart.querySelector("strong").textContent = "Awaiting executor initiation"; verificationStart.querySelector("small").textContent = "No verification transaction has been submitted"; verificationStart.classList.remove("complete"); } setupTheme(); setupNavigation(); setupForms(); if (window.ethereum) { window.ethereum.on("accountsChanged", accounts => { if (!accounts.length) { state.account = ""; state.signer = null; clearLoadedPlan(); updateConnection(); showToast("Wallet disconnected."); return; } const next = ethers.utils.getAddress(accounts[0]); if (state.account.toLowerCase() !== next.toLowerCase() && state.provider) { state.account = next; state.signer = state.provider.getSigner(next); service.setSigner(state.signer); updateConnection(); if (state.snapshot) renderPermissions(); showToast(`Connected account changed to ${shortAddress(next)}.`); } connect(false); }); window.ethereum.on("chainChanged", () => { clearLoadedPlan(); connect(false); }); connect(false); } else setNotice("MetaMask was not detected. You can inspect the interface, but blockchain actions require a wallet.", true); setInterval(async () => { if (state.snapshot?.status === 1) { try { await refreshBlockchainClock(); applyLifecycleState(); } catch { setNotice("Unable to refresh the blockchain clock.", true); } } }, 1000); }
 setupTimelockForm();
+
+/* HEIRLOOM_LIVE_COUNTDOWN_V1 */
+setInterval(async () => {
+  if (state.snapshot?.status !== 1) return;
+
+  renderLiveCountdown();
+  applyLifecycleState();
+
+  const now = Date.now();
+
+  if (now - lastBlockchainSync >= 10000) {
+    lastBlockchainSync = now;
+
+    try {
+      await refreshBlockchainClock();
+      renderLiveCountdown();
+      applyLifecycleState();
+    } catch {
+      setNotice("Unable to refresh the blockchain clock.", true);
+    }
+  }
+}, 1000);
+
 init();
 
