@@ -1,11 +1,12 @@
-import { ContractService, STATUS_NAMES, getSavedAddress, normalizeAddress, readableError } from "./contract-service.js";
-import { EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL, NETWORK_CONFIG } from "./config.js";
+import { CertificateService, ContractService, STATUS_NAMES, getSavedAddress, normalizeAddress, readableError } from "./contract-service.js";
+import { CERTIFICATE_CONTRACT_ADDRESS, CERTIFICATE_MINTER_ADDRESS, EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL, NETWORK_CONFIG } from "./config.js";
 
 const { ethers } = window;
 const service = new ContractService(ethers);
+const certificateService = new CertificateService(ethers);
 const DAY_SECONDS = 86400;
 const PRESET_TIMELOCK_DAYS = [7, 30, 90, 180];
-const state = { provider: null, signer: null, account: "", chainId: null, chainTimestamp: null, networkOk: false, snapshot: null, events: [], page: "dashboard", loading: false, modalPreviousFocus: null, labels: JSON.parse(localStorage.getItem("inheritance.labels") || "{}") };
+const state = { provider: null, signer: null, account: "", chainId: null, chainTimestamp: null, networkOk: false, snapshot: null, events: [], page: "dashboard", loading: false, modalPreviousFocus: null, labels: JSON.parse(localStorage.getItem("inheritance.labels") || "{}"), certificate: { transactionHash: "", executionTimestamp: "", records: [], status: "NOT_ELIGIBLE", error: "" } };
 const $ = id => document.getElementById(id);
 const q = selector => document.querySelector(selector);
 const qa = selector => [...document.querySelectorAll(selector)];
@@ -88,7 +89,7 @@ async function connect(request = false) {
     state.signer = state.provider.getSigner(accounts[0]);
     state.account = ethers.utils.getAddress(accounts[0]);
     const network = await state.provider.getNetwork(); state.chainId = Number(network.chainId); state.networkOk = EXPECTED_CHAIN_IDS.includes(state.chainId);
-    service.setProvider(createReadProvider(state.chainId, state.provider)); service.setSigner(state.signer);
+    service.setProvider(createReadProvider(state.chainId, state.provider)); service.setSigner(state.signer); certificateService.setProvider(service.readProvider); certificateService.setSigner(state.signer); certificateService.setAddress(CERTIFICATE_CONTRACT_ADDRESS);
     updateConnection(); if (previousAccount && previousAccount.toLowerCase() !== state.account.toLowerCase()) { showToast(`Connected account changed to ${shortAddress(state.account)}.`); }
     if (state.snapshot) renderPermissions();
     if (state.networkOk) {
@@ -104,6 +105,7 @@ function hideWrongNetwork() { $("wrongNetwork").classList.add("hidden"); }
 function clearLoadedPlan() {
   state.snapshot = null;
   state.events = [];
+  state.certificate = { transactionHash: "", executionTimestamp: "", records: [], status: "NOT_ELIGIBLE", error: "" };
   ["heroStatus", "balanceValue", "assetPageBalance", "beneficiaryCount", "allocationValue", "executorShort", "distributionDate", "detailOwner", "planOwner", "planExecutor", "verificationExecutor", "planTimelock"].forEach(id => setText(id, "—"));
   setText("statusPill", "NOT LOADED");
   setText("planStatusPill", "—");
@@ -112,6 +114,7 @@ function clearLoadedPlan() {
   setText("recentActivity", "No confirmed activity found for this deployment.");
   setText("contractLoadState", "No deployment loaded");
   setText("assetHealth", "Awaiting plan");
+  renderCertificatePanel();
   $("initiateBtn").disabled = true;
   $("executeBtn").disabled = true;
   $("cycleControls")?.classList.add("hidden");
@@ -141,7 +144,7 @@ function render() {
   if (state.provider) state.provider.getBalance(data.owner).then(value => setText("ownerWalletBalance", `${Number(ethers.utils.formatEther(value)).toFixed(4)} ETH`)).catch(() => setText("ownerWalletBalance", "Unavailable"));
   setText("executorShort", shortAddress(data.executor)); setText("executorState", isExecutor() ? "You are the trusted executor" : "Authorized verification party"); setText("distributionDate", data.unlockTimestamp > 0 ? formatDateShort(data.unlockTimestamp) : "Not scheduled"); setText("distributionCountdown", data.status === 1 ? countdown(data.unlockTimestamp) : "No active timelock"); setText("nextAction", nextAction(status, allocated)); setText("timelockSummary", data.status === 1 ? `Unlocks ${formatDate(data.unlockTimestamp)}` : "No timelock active");
   setText("detailContract", service.address); setText("detailOwner", data.owner); setText("detailNetwork", `${EXPECTED_NETWORK_LABEL} (${state.chainId || "—"})`); setText("detailCreated", formatDate(data.creationTimestamp)); setText("planOwner", shortAddress(data.owner)); setText("planExecutor", shortAddress(data.executor)); setText("planTimelock", formatDuration(data.timelockDuration)); setTimelockControl(data.timelockDuration); setText("planCreated", formatDate(data.creationTimestamp)); setText("planActivated", data.activationTimestamp > 0 ? formatDate(data.activationTimestamp) : "Not started"); setText("planUnlocked", data.unlockTimestamp > 0 ? formatDate(data.unlockTimestamp) : "Not scheduled"); setText("verificationExecutor", shortAddress(data.executor)); setText("verificationText", status === "ACTIVE" ? "Ready for authorized initiation." : status === "VERIFICATION_PENDING" ? "Timelock is running." : "No initiation available."); setText("verificationEligibility", isExecutor() && status === "ACTIVE" ? "Eligible" : status === "ACTIVE" ? "Executor only" : "Unavailable"); setText("activationDate", data.activationTimestamp ? formatDate(data.activationTimestamp) : "—"); setText("unlockDate", data.unlockTimestamp ? formatDate(data.unlockTimestamp) : "—"); setText("timelockTitle", data.status === 1 ? "Inheritance pending" : "No active timelock"); setText("documentValue", data.documentReference || "Not configured"); $("documentInput").value = data.documentReference || "";
-  const progress = data.status === 1 ? Math.min(100, Math.max(0, (Date.now() / 1000 - Number(data.activationTimestamp)) / (Number(data.unlockTimestamp) - Number(data.activationTimestamp)) * 100)) : data.status > 1 ? 100 : 0; setText("countdown", data.status === 1 ? countdown(data.unlockTimestamp) : "—"); $("timelockProgress").classList.toggle("complete", progress >= 100); renderBeneficiaries(); renderPermissions(); renderLabels();
+  const progress = data.status === 1 ? Math.min(100, Math.max(0, (Date.now() / 1000 - Number(data.activationTimestamp)) / (Number(data.unlockTimestamp) - Number(data.activationTimestamp)) * 100)) : data.status > 1 ? 100 : 0; setText("countdown", data.status === 1 ? countdown(data.unlockTimestamp) : "—"); $("timelockProgress").classList.toggle("complete", progress >= 100); renderBeneficiaries(); renderPermissions(); renderLabels(); renderCertificatePanel();
 }
 function nextAction(status, allocated) { if (!state.account) return "Connect a wallet to begin."; if (status === "ACTIVE" && isOwner() && allocated < 100) return `Add ${ (100 - allocated).toFixed(2)}% to complete allocation.`; if (status === "ACTIVE" && isExecutor()) return "Review the off-chain condition, then initiate verification."; if (status === "VERIFICATION_PENDING") return "Review the timelock before distribution."; if (status === "EXECUTED") return "Distribution has been completed."; if (status === "CANCELLED") return "This plan was cancelled."; return "Review the plan details."; }
 function countdown(unlock) {
@@ -203,7 +206,92 @@ function escapeHtml(value) { return String(value).replace(/[&<>"']/g, character 
 function validateBeneficiary() { const addressValue = $("beneficiaryAddress").value.trim(), shareValue = $("beneficiaryShare").value.trim(); let valid = true; ["beneficiaryAddressError", "beneficiaryShareError", "beneficiaryLabelError"].forEach(id => setFieldError(id, "")); let address; try { address = normalizeAddress(ethers, addressValue); } catch { setFieldError("beneficiaryAddressError", "Enter a valid Ethereum address, including 0x."); valid = false; } const share = Number(shareValue); if (!shareValue || !Number.isFinite(share) || share <= 0 || share > 100) { setFieldError("beneficiaryShareError", "Enter a percentage greater than 0 and no more than 100."); valid = false; } const snapshot = state.snapshot; if (address && snapshot) { if (address.toLowerCase() === snapshot.owner.toLowerCase()) { setFieldError("beneficiaryAddressError", "The plan owner cannot be a beneficiary."); valid = false; } else if (address.toLowerCase() === snapshot.executor.toLowerCase()) { setFieldError("beneficiaryAddressError", "The trusted executor cannot be a beneficiary."); valid = false; } else if (snapshot.beneficiaries.some(item => item.wallet.toLowerCase() === address.toLowerCase())) { setFieldError("beneficiaryAddressError", "This beneficiary is already registered."); valid = false; } const allocated = snapshot.beneficiaries.reduce((sum, item) => sum + Number(item.percentageBasisPoints), 0) / 100; if (allocated + share > 100) { setFieldError("beneficiaryShareError", `Only ${(100 - allocated).toFixed(2)}% remains available.`); valid = false; } } return valid ? { address, bps: Math.round(share * 100) } : null; }
 function editShare(index) { const current = bpsToPercent(state.snapshot.beneficiaries[index].percentageBasisPoints); const value = window.prompt(`New allocation percentage (current ${current}%):`, current); if (value === null) return; const share = Number(value); const without = state.snapshot.beneficiaries.reduce((sum, item, itemIndex) => sum + (itemIndex === index ? 0 : Number(item.percentageBasisPoints)), 0) / 100; if (!Number.isFinite(share) || share <= 0 || share > 100 || without + share > 100) { showToast(`Enter a valid share. Maximum available is ${(100 - without).toFixed(2)}%.`, true); return; } confirmAction("Update allocation", `Change this beneficiary's share to ${share}%.`, () => transact("Updating beneficiary share", () => service.updateBeneficiary(index, Math.round(share * 100)))); }
 
-async function transact(label, action, onConfirmed) { if (!state.signer || !service.contract) { showToast("Connect a wallet and load a contract first.", true); return; } state.loading = true; document.body.classList.add("transaction-busy"); setNotice(`${label}: preparing transaction…`); try { setNotice(`${label}: waiting for wallet approval…`); const tx = await action(); setNotice(`${label}: submitted. Pending confirmation…`); showToast(`${label} submitted: ${shortAddress(tx.hash)}`); await tx.wait(); await refreshAll(); if (onConfirmed) onConfirmed(); setNotice(`${label}: confirmed.`); showToast(`${label} confirmed.`); setTimeout(() => setNotice(""), 3200); } catch (error) { const rejected = error?.code === 4001 || error?.code === "ACTION_REJECTED"; const message = rejected ? "Transaction rejected in your wallet." : readableError(error); setNotice(`${label} ${rejected ? "rejected" : "failed"}: ${message}`, true); showToast(message, true); } finally { state.loading = false; document.body.classList.remove("transaction-busy"); } }
+function planExecutedEvent(receipt) { return (receipt?.events || []).find(event => event.event === "PlanExecuted" && event.address.toLowerCase() === service.address.toLowerCase()); }
+function latestPlanExecutedEvent() { return state.events.find(event => event.event === "PlanExecuted"); }
+function cycleReferenceFor(transactionHash, beneficiary, index) { return ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["address", "bytes32", "address", "uint256"], [service.address, transactionHash, beneficiary, index])); }
+function metadataUriFor(beneficiary, allocationBasisPoints, executionTimestamp, transactionHash, index) {
+  const metadata = { name: "Heirloom Inheritance Certificate", description: "A verifiable certificate of completed inheritance execution.", external_url: `${EXPLORER_BASE_URL}/tx/${transactionHash}`, attributes: [{ trait_type: "Beneficiary", value: beneficiary }, { trait_type: "Allocation basis points", value: String(allocationBasisPoints) }, { trait_type: "Execution timestamp", value: String(executionTimestamp) }, { trait_type: "Certificate index", value: String(index + 1) }] };
+  return `data:application/json,${encodeURIComponent(JSON.stringify(metadata))}`;
+}
+function isCertificateMinter() { return state.chainId === 11155111 && Boolean(state.account) && state.account.toLowerCase() === CERTIFICATE_MINTER_ADDRESS.toLowerCase(); }
+function prepareCertificateContext(snapshot, event) {
+  const transactionHash = event?.transactionHash || "";
+  const executionTimestamp = event?.args?.timestamp?.toString() || "";
+  if (!transactionHash || !executionTimestamp) return false;
+  if (state.certificate.transactionHash !== transactionHash) {
+    state.certificate.transactionHash = transactionHash;
+    state.certificate.executionTimestamp = executionTimestamp;
+    state.certificate.records = snapshot.beneficiaries.map((item, index) => ({ beneficiary: item.wallet, allocationBasisPoints: item.percentageBasisPoints.toString(), cycleReference: cycleReferenceFor(transactionHash, item.wallet, index), metadataURI: metadataUriFor(item.wallet, item.percentageBasisPoints, executionTimestamp, transactionHash, index), status: "ready", tokenId: "", txHash: "", error: "" }));
+  }
+  return true;
+}
+function renderCertificatePanel() {
+  const panel = $("certificatePanel");
+  if (!panel) return;
+  const button = $("issueCertificatesBtn");
+  const list = $("certificateList");
+  setText("certificateAddress", CERTIFICATE_CONTRACT_ADDRESS);
+  const executed = state.snapshot?.status === 2;
+  panel.classList.toggle("hidden", !state.snapshot);
+  if (!executed) { setText("certificateStatus", "Not eligible"); setText("certificateMessage", "Certificates become available after inheritance execution is confirmed."); if (button) button.disabled = true; if (list) list.innerHTML = `<div class="empty-state">No certificate issuance is available for this plan yet.</div>`; return; }
+  if (!state.certificate.transactionHash) prepareCertificateContext(state.snapshot, latestPlanExecutedEvent());
+  const allMinted = state.certificate.records.length > 0 && state.certificate.records.every(record => record.status === "minted");
+  const hasFailure = state.certificate.records.some(record => record.status === "failed");
+  const pending = state.certificate.records.some(record => record.status === "pending");
+  const status = !isCertificateMinter() ? "Certificate issuance requires the authorized certificate-minter wallet." : pending ? "Certificate mint pending." : allMinted ? "Certificate minted." : hasFailure ? "Certificate mint failed. Retry available." : "Ready to issue certificates.";
+  setText("certificateStatus", state.certificate.status === "MINTING" ? "Certificate mint pending." : status);
+  setText("certificateMessage", state.chainId !== 11155111 ? "Inheritance executed successfully. Switch MetaMask to Sepolia before issuing certificate NFTs." : isCertificateMinter() ? "Inheritance executed successfully. Certificate NFTs are issued separately and do not distribute assets." : "Inheritance executed successfully. Connect the authorized certificate-minter wallet to issue certificates.");
+  if (button) { button.disabled = !isCertificateMinter() || pending || allMinted || !state.certificate.records.length; button.classList.toggle("hidden", allMinted); }
+  if (list) list.innerHTML = state.certificate.records.length ? state.certificate.records.map(record => `<div class="certificate-row"><div><strong>${escapeHtml(shortAddress(record.beneficiary))}</strong><small>${(Number(record.allocationBasisPoints) / 100).toFixed(2)}% allocation</small></div><span class="certificate-row-status ${record.status}">${record.status === "minted" ? `Token #${escapeHtml(record.tokenId)}` : record.status === "failed" ? "Failed" : record.status === "pending" ? "Pending" : "Ready"}</span>${record.txHash ? `<a href="${EXPLORER_BASE_URL}/tx/${record.txHash}" target="_blank" rel="noreferrer">Transaction</a>` : ""}</div>`).join("") : `<div class="empty-state">No beneficiary certificates are available for issuance.</div>`;
+}
+async function issueCertificates() {
+  if (!state.snapshot || state.snapshot.status !== 2 || !isCertificateMinter()) { renderCertificatePanel(); return; }
+  const event = latestPlanExecutedEvent();
+  if (!prepareCertificateContext(state.snapshot, event)) { state.certificate.error = "The confirmed PlanExecuted event could not be identified."; setText("certificateStatus", "Certificate issuance unavailable"); setText("certificateMessage", state.certificate.error); return; }
+  state.certificate.status = "MINTING"; renderCertificatePanel();
+  for (const record of state.certificate.records) {
+    if (record.status === "minted") continue;
+    try {
+      if (await certificateService.isCycleUsed(record.cycleReference)) {
+        const existing = await certificateService.findByCycleReference(record.cycleReference);
+        record.status = "minted";
+        record.tokenId = existing?.args?.tokenId?.toString() || "already issued";
+        record.txHash = existing?.transactionHash || "";
+        renderCertificatePanel();
+        continue;
+      }
+      record.status = "pending";
+      renderCertificatePanel();
+      const tx = await certificateService.mintCertificate(record.beneficiary, record.allocationBasisPoints, state.certificate.executionTimestamp, record.cycleReference, record.metadataURI);
+      record.txHash = tx.hash;
+      const receipt = await tx.wait();
+      const mintedEvent = (receipt.events || []).find(item => item.event === "CertificateMinted");
+      record.tokenId = mintedEvent?.args?.tokenId?.toString() || "confirmed";
+      record.status = "minted";
+    } catch (error) {
+      record.status = "failed";
+      record.error = readableError(error);
+    }
+    renderCertificatePanel();
+  }
+  state.certificate.status = "";
+  renderCertificatePanel();
+}
+async function handleExecutionConfirmed(receipt, tx) {
+  const executedEvent = planExecutedEvent(receipt);
+  if (!executedEvent) { setText("certificateStatus", "Certificate issuance unavailable"); setText("certificateMessage", "Inheritance executed successfully, but the confirmed PlanExecuted event was not found."); return; }
+  try {
+    const snapshot = await service.readSnapshot();
+    state.snapshot = snapshot;
+    prepareCertificateContext(snapshot, executedEvent);
+    await issueCertificates();
+  } catch (error) {
+    setText("certificateStatus", "Certificate mint failed. Retry available.");
+    setText("certificateMessage", `Inheritance executed successfully. Certificate issuance could not be prepared: ${readableError(error)}`);
+  }
+}
+
+async function transact(label, action, onConfirmed) { if (!state.signer || !service.contract) { showToast("Connect a wallet and load a contract first.", true); return; } state.loading = true; document.body.classList.add("transaction-busy"); setNotice(`${label}: preparing transaction…`); try { setNotice(`${label}: waiting for wallet approval…`); const tx = await action(); setNotice(`${label}: submitted. Pending confirmation…`); showToast(`${label} submitted: ${shortAddress(tx.hash)}`); const receipt = await tx.wait(); if (onConfirmed) await onConfirmed(receipt, tx); await refreshAll(); setNotice(`${label}: confirmed.`); showToast(`${label} confirmed.`); setTimeout(() => setNotice(""), 3200); } catch (error) { const rejected = error?.code === 4001 || error?.code === "ACTION_REJECTED"; const message = rejected ? "Transaction rejected in your wallet." : readableError(error); setNotice(`${label} ${rejected ? "rejected" : "failed"}: ${message}`, true); showToast(message, true); } finally { state.loading = false; document.body.classList.remove("transaction-busy"); } }
 function confirmAction(title, text, action) { state.modalPreviousFocus = document.activeElement; $("modalTitle").textContent = title; $("modalText").textContent = text; $("confirmModal").classList.remove("hidden"); const confirm = $("modalConfirm"); const cancel = $("modalCancel"); const close = () => { $("confirmModal").classList.add("hidden"); document.removeEventListener("keydown", trapModalFocus); state.modalPreviousFocus?.focus(); }; confirm.onclick = () => { close(); action(); }; cancel.onclick = close; $("modalClose").onclick = close; document.addEventListener("keydown", trapModalFocus); confirm.focus(); function trapModalFocus(event) { if (event.key === "Escape") close(); if (event.key !== "Tab") return; const focusable = [$("modalClose"), cancel, confirm]; const current = focusable.indexOf(document.activeElement); const next = event.shiftKey ? (current <= 0 ? focusable.length - 1 : current - 1) : (current === focusable.length - 1 ? 0 : current + 1); event.preventDefault(); focusable[next].focus(); } }
 async function copy(value) { try { await navigator.clipboard.writeText(value); showToast("Copied to clipboard."); } catch { showToast("Copy was unavailable in this browser.", true); } }
 
@@ -238,7 +326,8 @@ function setupForms() {
   $("documentForm").addEventListener("submit", event => { event.preventDefault(); const value = $("documentInput").value.trim(); confirmAction("Update document reference", value ? "Store this reference on-chain? The document itself is never stored here." : "Clear the document reference on-chain?", () => transact("Updating document reference", () => service.setDocumentReference(value))); });
   $("initiateBtn").addEventListener("click", () => confirmAction("Initiate verification", "Only proceed after the required real-world condition has been verified off-chain. This starts the timelock.", () => transact("Initiating verification", () => service.initiateInheritance())));
   $("cancelBtn").addEventListener("click", () => confirmAction("Cancel inheritance", "This permanently marks the current plan as cancelled. Continue?", () => transact("Cancelling inheritance", () => service.cancelInheritance())));
-  $("executeBtn").addEventListener("click", () => confirmAction("Execute distribution", "The contract will distribute the protected assets according to the registered percentages. Continue?", () => transact("Executing distribution", () => service.executeInheritance())));
+  $("executeBtn").addEventListener("click", () => confirmAction("Execute distribution", "The contract will distribute the protected assets according to the registered percentages. Continue?", () => transact("Executing distribution", () => service.executeInheritance(), handleExecutionConfirmed)));
+  $("issueCertificatesBtn").addEventListener("click", () => issueCertificates());
   $("withdrawCancelledBtn").addEventListener("click", () => confirmAction("Recover cancelled assets", "Recover the remaining contract balance to the plan owner before resetting this cycle?", () => transact("Recovering cancelled assets", () => service.withdrawCancelledAssets())));
   $("resetPlanBtn").addEventListener("click", () => confirmAction("Reset plan", "Clear this completed cycle and prepare the plan for new beneficiaries and deposits?", () => transact("Resetting plan", () => service.resetPlan())));
 }

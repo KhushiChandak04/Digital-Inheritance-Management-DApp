@@ -40,6 +40,19 @@ export const ABI = [
   "event PlanReset(uint256 timestamp)"
 ];
 
+export const CERTIFICATE_ABI = [
+  "function sourceInheritanceContract() view returns (address)",
+  "function owner() view returns (address)",
+  "function minter() view returns (address)",
+  "function certificateCount() view returns (uint256)",
+  "function usedCycleReferences(bytes32) view returns (bool)",
+  "function certificateDetails(uint256) view returns (address beneficiary,uint256 allocationBasisPoints,uint256 executionTimestamp,bytes32 cycleReference)",
+  "function tokenURI(uint256) view returns (string)",
+  "function balanceOf(address) view returns (uint256)",
+  "function mintCertificate(address beneficiary,uint256 allocationBasisPoints,uint256 executionTimestamp,bytes32 cycleReference,string metadataURI)",
+  "event CertificateMinted(uint256 indexed tokenId,address indexed beneficiary,uint256 allocationBasisPoints,uint256 executionTimestamp,bytes32 indexed cycleReference)"
+];
+
 export const STATUS_NAMES = ["ACTIVE", "VERIFICATION_PENDING", "EXECUTED", "CANCELLED"];
 
 export function getSavedAddress() {
@@ -129,4 +142,56 @@ export class ContractService {
   executeInheritance() { return this.write("executeInheritance"); }
   withdrawCancelledAssets() { return this.write("withdrawCancelledAssets"); }
   resetPlan() { return this.write("resetPlan"); }
+}
+
+export class CertificateService {
+  constructor(ethers) {
+    this.ethers = ethers;
+    this.readProvider = null;
+    this.readContract = null;
+    this.signer = null;
+    this.contract = null;
+    this.address = "";
+  }
+
+  setProvider(provider) {
+    this.readProvider = provider;
+    if (this.address) this.readContract = new this.ethers.Contract(this.address, CERTIFICATE_ABI, provider);
+  }
+
+  setSigner(signer) {
+    this.signer = signer;
+    if (this.address) this.contract = new this.ethers.Contract(this.address, CERTIFICATE_ABI, signer);
+  }
+
+  setAddress(address) {
+    this.address = normalizeAddress(this.ethers, address);
+    const runner = this.signer || this.readProvider;
+    this.contract = new this.ethers.Contract(this.address, CERTIFICATE_ABI, runner);
+    this.readContract = new this.ethers.Contract(this.address, CERTIFICATE_ABI, this.readProvider || runner);
+  }
+
+  async isCycleUsed(cycleReference) {
+    return this.readContract.usedCycleReferences(cycleReference);
+  }
+
+  async findByCycleReference(cycleReference) {
+    const readContract = this.readContract || this.contract;
+    const events = await readContract.queryFilter(
+      readContract.filters.CertificateMinted(null, null, null, cycleReference),
+      0,
+      "latest"
+    );
+    return events.length ? events[events.length - 1] : null;
+  }
+
+  mintCertificate(beneficiary, allocationBasisPoints, executionTimestamp, cycleReference, metadataURI) {
+    return this.contract.connect(this.signer).mintCertificate(
+      beneficiary,
+      allocationBasisPoints,
+      executionTimestamp,
+      cycleReference,
+      metadataURI
+    );
+  }
 }
