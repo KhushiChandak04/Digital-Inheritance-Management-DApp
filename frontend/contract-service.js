@@ -41,6 +41,8 @@ export const ABI = [
 ];
 
 export const CERTIFICATE_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
   "function sourceInheritanceContract() view returns (address)",
   "function owner() view returns (address)",
   "function minter() view returns (address)",

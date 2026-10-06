@@ -1,5 +1,5 @@
 import { CertificateService, ContractService, STATUS_NAMES, getSavedAddress, normalizeAddress, readableError } from "./contract-service.js";
-import { CERTIFICATE_CONTRACT_ADDRESS, CERTIFICATE_MINTER_ADDRESS, EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL, NETWORK_CONFIG } from "./config.js";
+import { CERTIFICATE_CONTRACT_ADDRESS, CERTIFICATE_ISSUER_ADDRESS, EXPECTED_CHAIN_IDS, EXPECTED_NETWORK_LABEL, EXPLORER_BASE_URL, NETWORK_CONFIG } from "./config.js";
 
 const { ethers } = window;
 const service = new ContractService(ethers);
@@ -213,7 +213,7 @@ function metadataUriFor(beneficiary, allocationBasisPoints, executionTimestamp, 
   const metadata = { name: "Heirloom Inheritance Certificate", description: "A verifiable certificate of completed inheritance execution.", external_url: `${EXPLORER_BASE_URL}/tx/${transactionHash}`, attributes: [{ trait_type: "Beneficiary", value: beneficiary }, { trait_type: "Allocation basis points", value: String(allocationBasisPoints) }, { trait_type: "Execution timestamp", value: String(executionTimestamp) }, { trait_type: "Certificate index", value: String(index + 1) }] };
   return `data:application/json,${encodeURIComponent(JSON.stringify(metadata))}`;
 }
-function isCertificateMinter() { return state.chainId === 11155111 && Boolean(state.account) && state.account.toLowerCase() === CERTIFICATE_MINTER_ADDRESS.toLowerCase(); }
+function isCertificateIssuer() { return state.chainId === 11155111 && Boolean(state.account) && state.account.toLowerCase() === CERTIFICATE_ISSUER_ADDRESS.toLowerCase(); }
 function prepareCertificateContext(snapshot, event) {
   const transactionHash = event?.transactionHash || "";
   const executionTimestamp = event?.args?.timestamp?.toString() || "";
@@ -238,14 +238,14 @@ function renderCertificatePanel() {
   const allMinted = state.certificate.records.length > 0 && state.certificate.records.every(record => record.status === "minted");
   const hasFailure = state.certificate.records.some(record => record.status === "failed");
   const pending = state.certificate.records.some(record => record.status === "pending");
-  const status = !isCertificateMinter() ? "Certificate issuance requires the authorized certificate-minter wallet." : pending ? "Certificate mint pending." : allMinted ? "Certificate minted." : hasFailure ? "Certificate mint failed. Retry available." : "Ready to issue certificates.";
+  const status = !isCertificateIssuer() ? "Certificate issuance requires the inheritance owner wallet." : pending ? "Certificate mint pending." : allMinted ? "Certificate minted." : hasFailure ? "Certificate mint failed. Retry available." : "Ready to issue certificates.";
   setText("certificateStatus", state.certificate.status === "MINTING" ? "Certificate mint pending." : status);
-  setText("certificateMessage", state.chainId !== 11155111 ? "Inheritance executed successfully. Switch MetaMask to Sepolia before issuing certificate NFTs." : isCertificateMinter() ? "Inheritance executed successfully. Certificate NFTs are issued separately and do not distribute assets." : "Inheritance executed successfully. Connect the authorized certificate-minter wallet to issue certificates.");
-  if (button) { button.disabled = !isCertificateMinter() || pending || allMinted || !state.certificate.records.length; button.classList.toggle("hidden", allMinted); }
+  setText("certificateMessage", state.chainId !== 11155111 ? "Inheritance executed successfully. Switch MetaMask to Sepolia before issuing certificate NFTs." : isCertificateIssuer() ? "Inheritance executed successfully. The owner is issuing certificate NFTs separately; asset distribution is already complete." : "Inheritance executed successfully. Connect the inheritance owner wallet to issue certificates.");
+  if (button) { button.disabled = !isCertificateIssuer() || pending || allMinted || !state.certificate.records.length; button.classList.toggle("hidden", allMinted); }
   if (list) list.innerHTML = state.certificate.records.length ? state.certificate.records.map(record => `<div class="certificate-row"><div><strong>${escapeHtml(shortAddress(record.beneficiary))}</strong><small>${(Number(record.allocationBasisPoints) / 100).toFixed(2)}% allocation</small></div><span class="certificate-row-status ${record.status}">${record.status === "minted" ? `Token #${escapeHtml(record.tokenId)}` : record.status === "failed" ? "Failed" : record.status === "pending" ? "Pending" : "Ready"}</span>${record.txHash ? `<a href="${EXPLORER_BASE_URL}/tx/${record.txHash}" target="_blank" rel="noreferrer">Transaction</a>` : ""}</div>`).join("") : `<div class="empty-state">No beneficiary certificates are available for issuance.</div>`;
 }
 async function issueCertificates() {
-  if (!state.snapshot || state.snapshot.status !== 2 || !isCertificateMinter()) { renderCertificatePanel(); return; }
+  if (!state.snapshot || state.snapshot.status !== 2 || !isCertificateIssuer()) { renderCertificatePanel(); return; }
   const event = latestPlanExecutedEvent();
   if (!prepareCertificateContext(state.snapshot, event)) { state.certificate.error = "The confirmed PlanExecuted event could not be identified."; setText("certificateStatus", "Certificate issuance unavailable"); setText("certificateMessage", state.certificate.error); return; }
   state.certificate.status = "MINTING"; renderCertificatePanel();
