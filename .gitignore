@@ -2,3 +2,5 @@ node_modules
 .ganache-heirloom/
 .env
 ganache-accounts.json
+.vercel
+.env*
